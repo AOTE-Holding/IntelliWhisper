@@ -1,0 +1,86 @@
+[
+  {
+    "id": 1,
+    "context": "general",
+    "language": "de",
+    "description": "DE clean — no changes expected",
+    "input": "Die Besprechung findet am Montag um 14 Uhr statt. Bitte bringen Sie die Unterlagen mit."
+  },
+  {
+    "id": 2,
+    "context": "general",
+    "language": "de",
+    "description": "DE fillers + repetition",
+    "input": "Ähm also ich wollte sagen, dass wir, dass wir morgen um neun Uhr das Meeting haben und ähm ja alle sollten dabei sein."
+  },
+  {
+    "id": 3,
+    "context": "general",
+    "language": "de",
+    "description": "DE casual with proper names",
+    "input": "Hallo, also wir sind wieder in Aarau, Fischer Fritz ist auch dabei und Uwe auch."
+  },
+  {
+    "id": 4,
+    "context": "general",
+    "language": "de",
+    "description": "DE long paragraph with multiple fillers",
+    "input": "Also ähm wir haben gestern das Projekt besprochen und ähm die Ergebnisse sind, sind eigentlich ganz gut. Der Kunde war zufrieden und hat gesagt, dass er nächste Woche noch mal anrufen will. Und dann ähm ja dann müssen wir noch die Dokumentation fertigmachen und halt die ganzen Tests durchlaufen lassen bevor wir das Release machen können."
+  },
+  {
+    "id": 5,
+    "context": "general",
+    "language": "de",
+    "description": "DE short with minor punctuation issue",
+    "input": "Ich teste gerade die Transkription aber es scheint noch nicht so ganz zu funktionieren trotzdem ist es schönes Wetter."
+  },
+  {
+    "id": 6,
+    "context": "general",
+    "language": "en",
+    "description": "EN fillers",
+    "input": "Um so yeah I was thinking we could uh maybe move the meeting to Thursday because uh Bob is not available on Wednesday."
+  },
+  {
+    "id": 7,
+    "context": "general",
+    "language": "en",
+    "description": "EN clean — no changes expected",
+    "input": "The quarterly results look good and we should continue with the current strategy."
+  },
+  {
+    "id": 8,
+    "context": "email",
+    "language": "de",
+    "description": "DE email — meeting request",
+    "input": "Ähm hallo ich wollte fragen ob wir uns nächste Woche Dienstag treffen können um das Projekt zu besprechen. Es gibt ein paar offene Punkte die wir klären müssen."
+  },
+  {
+    "id": 9,
+    "context": "email",
+    "language": "de",
+    "description": "DE email — follow-up with Sie",
+    "input": "Also wie besprochen schicke ich Ihnen hiermit die Unterlagen. Ähm bitte schauen Sie sich die Zahlen auf Seite drei an und geben Sie mir Bescheid."
+  },
+  {
+    "id": 10,
+    "context": "email",
+    "language": "en",
+    "description": "EN email — status update",
+    "input": "Um hi I wanted to give you a quick update on the project. So uh everything is on track and we should be done by Friday."
+  },
+  {
+    "id": 11,
+    "context": "general",
+    "language": "de",
+    "description": "DE long ~2min dictation — project status update",
+    "input": "Also ähm ich wollte kurz zusammenfassen was wir heute in der Besprechung besprochen haben. Also erstens ähm das Frontend-Team hat den neuen Login-Flow fertiggestellt und der ist jetzt auch schon im Staging deployed. Die Tests laufen alle durch, also da gibt es keine Probleme. Ähm zweitens hat Markus gesagt, dass die API-Migration auf Version drei äh noch ungefähr zwei Wochen braucht, weil da halt noch ein paar Breaking Changes drin sind die wir mit dem Mobile-Team abstimmen müssen. Das ist ein bisschen ärgerlich aber ist halt so. Ähm drittens die Sache mit dem Datenbankindex, da hat sich Sarah drum gekümmert und die Performance ist jetzt deutlich besser, also die Ladezeiten auf der Dashboard-Seite sind von ähm drei Sekunden auf unter eine Sekunde runter. Das ist echt gut. Und viertens ähm wir müssen noch klären wer die Code-Review für den Payment-Service übernimmt, weil Thomas nächste Woche im Urlaub ist und ähm Lisa ist auch auf einer Konferenz. Also da müssten wir noch jemanden finden. Achso und dann war da noch die Sache mit dem CI-Pipeline, die bricht immer wieder ab wegen diesem Flaky Test in der Notification-Komponente. Ähm Kevin hat gesagt er schaut sich das morgen an. Ja und ansonsten ähm läuft eigentlich alles ganz gut, wir sind im Zeitplan und das nächste Release ist für übernächsten Freitag geplant."
+  },
+  {
+    "id": 12,
+    "context": "email",
+    "language": "de",
+    "description": "DE long ~2min email — detailed project proposal",
+    "input": "Also ähm ich schreibe Ihnen weil wir gerne ein neues Projekt mit Ihnen besprechen würden. Ähm es geht um die Entwicklung einer internen Webanwendung für unser Projektmanagement. Aktuell nutzen wir verschiedene Tools, also Jira für die Tickets, Confluence für die Dokumentation und dann noch diverse Excel-Tabellen für die Zeiterfassung und das ist halt alles ziemlich umständlich und ähm fehleranfällig. Unsere Idee wäre jetzt eine einheitliche Plattform zu entwickeln die das alles zusammenführt. Ähm konkret bräuchten wir eine Projektverwaltung mit Kanban-Board, eine integrierte Zeiterfassung die automatisch mit den Tickets verknüpft ist, und ähm ein Reporting-Dashboard für die Geschäftsführung. Das Ganze sollte als Webanwendung laufen, idealerweise mit einem modernen Tech-Stack also React im Frontend und ähm Node oder Python im Backend. Wir haben ungefähr 50 Mitarbeiter die das System nutzen würden und ähm wir würden gerne im zweiten Quartal mit der Entwicklung starten. Ähm bezüglich Budget haben wir einen Rahmen von 80 bis 120 Tausend Euro eingeplant. Könnten Sie uns einen Terminvorschlag machen für ein erstes Gespräch? Am besten wäre nächste Woche Dienstag oder Mittwoch, ähm vormittags wenn es geht. Wir würden dann auch unseren technischen Leiter Herrn Müller mitbringen der die Anforderungen im Detail erklären kann."
+  }
+]

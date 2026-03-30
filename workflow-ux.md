@@ -31,8 +31,9 @@ A small floating window that appears during the recording and processing workflo
 The panel appears anchored near the menu bar icon (or at a user-configured position) and shows one of three states:
 
 **1. Recording State**
-- A waveform or pulsing indicator showing that audio is being captured
+- A pulsing red circle indicator showing that audio is being captured
 - A duration timer counting up (e.g., "0:03")
+- Tags showing the detected context (Email/General) and whether formatting is enabled
 - Visible as long as the user holds the hotkey
 
 **2. Processing State**
@@ -59,18 +60,18 @@ The panel appears anchored near the menu bar icon (or at a user-configured posit
    - The menu bar icon changes to indicate active recording.
    - Audio capture begins via WhisperKit.
 
-3. **User speaks** while continuing to hold the hotkey. They can speak for as long as needed. The floating panel shows a live waveform and duration.
+3. **User speaks** while continuing to hold the hotkey. They can speak for as long as needed. The floating panel shows a pulsing indicator and duration counter.
 
 4. **User releases the hotkey.** At key-up:
    - Audio capture stops.
    - The floating panel transitions to "Processing" state.
    - WhisperKit transcribes the audio locally.
    - The transcription and detected context are sent to the local Ollama instance for cleanup. For general context, light cleanup is applied (grammar, punctuation, filler word removal). For email context, full formatting is applied (greeting, closing, professional tone).
-   - Once cleanup completes, the result is automatically copied to the clipboard.
+   - Once cleanup completes, the result is either copied to the clipboard or auto-pasted into the active app (depending on the configured output mode).
    - The floating panel briefly shows the result (~2 seconds), then auto-hides.
    - The menu bar icon returns to idle state.
 
-5. **User presses Cmd+V** in their target app. The formatted text is pasted.
+5. **User presses Cmd+V** in their target app (if using clipboard mode). In paste mode, the text is inserted automatically.
 
 ### Discard Gesture
 
@@ -118,10 +119,12 @@ After setup, the app is ready. All subsequent launches skip setup entirely.
 
 Accessible from the menu bar dropdown. Settings include:
 
-- **Hotkey** — push-to-talk key. Options: Fn (Globe), Right Option (⌥), § (left of 1). Default: Fn.
 - **Language** — preferred transcription language (default: German). Options: German, English, Auto-detect.
-- **Whisper model** — which WhisperKit model to use for transcription (selectable from available sizes).
-- **Ollama model** — which model to use for text cleanup (default: hardware-dependent, `qwen3.5:2b` on 8 GB RAM or `qwen3.5:4b` on 16 GB+, selectable from installed models).
+- **Whisper model** — which WhisperKit model to use for transcription (selectable from available sizes: tiny, base, small, large-v3-turbo). Shows model size and a "Recommended" badge on the default (small).
+- **Hotkey** — push-to-talk key. Options: Fn (Globe), Right Option (⌥), § (left of 1). Default: Fn. Shows a hint about the Fn/emoji picker system setting when Fn is selected.
+- **Output mode** — what happens after transcription: "Copy to clipboard" (default) or "Paste directly" (simulates Cmd+V; requires Accessibility permission).
+- **Formatting toggles** — independently enable/disable formatting for general and email contexts. When all formatting is disabled, raw transcription is used.
+- **Ollama model** — which model to use for text cleanup (default: hardware-dependent, `qwen3.5:2b` on <16 GB RAM or `qwen3.5:4b` on 16 GB+). Populated from installed Ollama models; falls back to a text field if Ollama is unreachable. Shows a connection status indicator (green/yellow).
 
 ---
 
@@ -134,3 +137,4 @@ Accessible from the menu bar dropdown. Settings include:
 | No speech detected in recording | Panel shows "No speech detected." Nothing is copied. |
 | Hotkey not available / intercepted by macOS | User configures an alternative hotkey in Preferences. |
 | Screen Recording permission denied | Context detection falls back to bundle identifier matching only. Browser tab detection is unavailable, but native apps still detected. |
+| Accessibility permission denied (paste mode) | Auto-paste is skipped; text is still copied to the clipboard. The user can paste manually with Cmd+V. |

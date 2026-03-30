@@ -7,31 +7,34 @@ All design decisions are finalized in concept.md, workflow-ux.md, and technical-
 ```
 IntelliWhisper/
 ├── App/
-│   ├── IntelliWhisperApp.swift          # @main entry point, menu bar setup
-│   └── AppDelegate.swift                # NSApplicationDelegate, lifecycle
+│   └── IntelliWhisperApp.swift          # @main entry point + AppDelegate (lifecycle, bootstrap)
 ├── Models/
-│   └── Types.swift                      # FormatContext, TranscriptionResult, FormattedOutput, PipelineState
+│   ├── Types.swift                      # FormatContext, Transcription, FormattedOutput, PipelineState, etc.
+│   └── HotkeyChoice.swift              # Configurable hotkey options (Fn, Right Option, §)
 ├── Protocols/
 │   ├── AudioRecording.swift             # AudioRecording protocol
 │   ├── Transcribing.swift               # Transcribing protocol
 │   ├── ContextDetecting.swift           # ContextDetecting protocol
 │   └── Formatting.swift                 # Formatting protocol
 ├── Services/
-│   ├── ClipboardManager.swift           # NSPasteboard wrapper, history, undo
+│   ├── ClipboardManager.swift           # NSPasteboard wrapper, history, undo, auto-paste
 │   ├── ContextDetector.swift            # Layer 1 + Layer 2 detection
-│   ├── HotkeyManager.swift             # CGEventTap for Fn key-down/up + Escape
-│   ├── OllamaFormatter.swift           # Ollama REST client, streaming, health check
+│   ├── HotkeyManager.swift             # CGEventTap for Fn/RightOption/§ key-down/up + Escape
+│   ├── OllamaFormatter.swift           # Ollama REST client, streaming, health check, model pull
 │   ├── WhisperKitRecorder.swift         # AudioProcessor recording
-│   └── WhisperKitTranscriber.swift      # WhisperKit transcription + model management
+│   ├── WhisperKitTranscriber.swift      # WhisperKit transcription + model management
+│   └── Log.swift                        # SwiftyBeaver logging setup (console + file)
 ├── Pipeline/
-│   └── PipelineOrchestrator.swift       # Wires subsystems, manages state machine
+│   ├── PipelineOrchestrator.swift       # Wires subsystems, manages state machine
+│   └── AppInitializer.swift             # Per-launch prerequisite checks (Input Monitoring, WhisperKit, Ollama)
 ├── UI/
-│   ├── MenuBarView.swift                # NSStatusItem, dropdown menu, clipboard history
+│   ├── MenuBarView.swift                # MenuBarController: NSStatusItem, dropdown menu, clipboard history
 │   ├── FloatingPanelController.swift    # NSPanel (non-activating), recording/processing/result states
 │   ├── FloatingPanelView.swift          # SwiftUI content for the panel
-│   └── PreferencesView.swift            # Settings window
+│   └── PreferencesView.swift            # Settings window (language, model, hotkey, output, formatting)
 └── Setup/
-    └── FirstRunView.swift               # Onboarding: permissions, Ollama check, model download
+    ├── FirstRunCoordinator.swift        # Drives 6-step onboarding wizard
+    └── FirstRunView.swift               # SwiftUI views for each onboarding step
 ```
 
 ## Dependency Graph
@@ -61,7 +64,7 @@ Data Types & Protocols          (no deps)
 - Disable App Sandbox in entitlements
 - Add `NSMicrophoneUsageDescription` to Info.plist
 - Configure `LSUIElement = YES` (no dock icon — menu bar only)
-- Add SPM dependencies: WhisperKit, KeyboardShortcuts
+- Add SPM dependencies: WhisperKit, SwiftyBeaver
 - Create a minimal `IntelliWhisperApp.swift` with `MenuBarExtra` that shows an icon
 - **Verify:** App builds, launches, icon appears in menu bar, no dock icon
 
@@ -123,11 +126,11 @@ These three have no cross-dependencies and can be built in any order.
 ### 4a. Ollama Formatter
 
 **File:** `OllamaFormatter.swift`, conforms to `Formatting`
-- `healthCheck()` — `GET http://localhost:11434/api/tags`, verify the configured model (default `qwen3.5:0.8b`) is in the response
-- `format(transcription:context:language:)` — `POST /api/chat` with `stream: true`. System prompt as defined in technical-spec.md §4. Returns `AsyncThrowingStream<String, Error>` for token-by-token delivery.
+- `healthCheck()` — `GET http://localhost:11434/api/tags`, verify the configured model is in the response
+- `format(transcription:context:language:)` — `POST /api/chat` with `stream: true`. Context-specific system prompt with few-shot examples. Returns `AsyncThrowingStream<String, Error>` for token-by-token delivery.
 - 15-second timeout. On error or timeout, throw so the pipeline can fall back to raw transcription.
 - Use `URLSession` with async bytes — no third-party HTTP dependency needed.
-- **Verify:** With Ollama running and qwen3.5:0.8b pulled, call format() with a test German transcription, confirm streamed tokens arrive and form a coherent cleaned-up output
+- **Verify:** With Ollama running and the default model pulled, call format() with a test German transcription, confirm streamed tokens arrive and form a coherent cleaned-up output
 
 ### 4b. Audio Capture
 
@@ -194,7 +197,10 @@ These three have no cross-dependencies and can be built in any order.
   - Hotkey picker (default: Fn/Globe)
   - Language selector: German, English, Auto-detect (default: German)
   - Preview duration slider (default: 2 seconds)
-  - Ollama model picker (default: qwen3.5:0.8b, populated from installed Ollama models)
+  - Output mode selector: clipboard (default) or paste directly (requires Accessibility)
+  - Formatting toggles: independently enable/disable for general and email contexts
+  - Ollama model picker (default: hardware-dependent `qwen3.5:2b`/`qwen3.5:4b`, populated from installed Ollama models)
+  - Ollama connection status indicator
 - Persist all settings via `@AppStorage` / `UserDefaults`
 
 **Verify:** Full UX flow end-to-end. Hold Fn → panel with waveform → release → processing spinner → result preview → auto-hide. Menu bar icon changes state. Preferences open and persist.
@@ -209,13 +215,13 @@ These three have no cross-dependencies and can be built in any order.
   2. Screen Recording permission — explain it only reads window titles, not screen content
   3. Input Monitoring permission — explain it captures the hotkey only
   4. Fn key check — if system is set to emoji picker, show instructions to change it
-  5. Ollama check — check reachability, auto-pull default model (`qwen3.5:0.8b`) with progress if missing, show install instructions (`brew install ollama`, `ollama serve`) if Ollama not running
+  5. Ollama check — check reachability, auto-pull default model with progress if missing, show install instructions (`brew install ollama`, `ollama serve`) if Ollama not running
   6. WhisperKit model download — progress bar, download on button press
 - Store `setupCompleted` flag in UserDefaults. Skip on subsequent launches.
 
 **Remaining doc fixes:**
-- workflow-ux.md line 113: `gemma3:4b` → `qwen3.5:0.8b`
-- workflow-ux.md line 110: clarify Screen Recording doesn't record the screen
+- ~~workflow-ux.md: fix Ollama model default~~ (done)
+- ~~workflow-ux.md: clarify Screen Recording doesn't record the screen~~ (done — covered in FirstRunView)
 - workflow-ux.md: add note that first launch requires internet for model download
 - workflow-ux.md preferences: add Launch at Login option
 

@@ -106,13 +106,15 @@ let windowList = CGWindowListCopyWindowInfo(
 
 - **Permission:** Screen Recording (prompted by macOS on first call).
 - **Approach:** Find the window owned by the frontmost app's PID (`kCGWindowOwnerPID`) that is on-screen. Read `kCGWindowName` (the window title).
-- **Matching:** Apply substring matching against the window title:
+- **Matching:** Two strategies are applied to each window title:
+  1. **Email address regex** (`\S+@\S+\.\S+`) — a strong signal that the tab is a mail client.
+  2. **Substring matching** against known email-related terms:
 
 | Window title contains | Format |
 |----------------------|--------|
-| "Gmail" | email |
-| "Outlook" | email |
-| "Yahoo Mail" | email |
+| "Gmail", "Outlook", "Yahoo Mail", "Proton Mail", "Zoho Mail" | email |
+| "Inbox", "Posteingang", "Boîte de réception", "Bandeja de entrada" | email |
+| "Webmail", "Roundcube", "Horde" | email |
 
 - **Fallback:** If Screen Recording permission is denied, Layer 2 is skipped. The app relies on Layer 1 alone. Browser-based webmail will produce `general` context (light cleanup only).
 
@@ -135,35 +137,51 @@ enum FormatContext {
 
 The app communicates with Ollama via its local HTTP API at `http://localhost:11434`.
 
-- **Library:** Use [OllamaKit](https://github.com/kevinhermawan/OllamaKit) or direct `URLSession` calls against the Ollama REST API.
+- **Library:** Direct `URLSession` calls against the Ollama REST API (no third-party HTTP dependency).
 - **Endpoint:** `POST /api/chat` with `stream: true`.
-- **Model:** `qwen3.5:0.8b` (configurable in preferences). Thinking mode disabled (`think: false`).
+- **Model:** Hardware-dependent default: `qwen3.5:4b` on machines with 16 GB+ RAM, `qwen3.5:2b` otherwise (configurable in preferences). Thinking mode disabled (`think: false`).
 
 ### Health Check
 
-On app launch (and periodically), the app calls `GET /api/tags` to verify:
+On app launch (and every 30 seconds), the app calls `GET /api/tags` to verify:
 1. Ollama is reachable at localhost:11434.
-2. The configured model (`qwen3.5:0.8b`) is present in the model list.
+2. The configured model is present in the model list.
 
 If either check fails, the menu bar icon shows a yellow warning indicator. Recording still works — the fallback is to copy the raw transcription to the clipboard without formatting.
 
 ### Prompt Construction
 
-The system prompt is static and defines minimal-intervention cleanup behavior:
+The context determines which system prompt is used. Each prompt includes few-shot examples to anchor the model's behaviour.
+
+**General system prompt:**
 
 ```
-Fix grammar, punctuation, and remove filler words (um, uh, ähm).
-Remove accidental repetitions. Do not restructure or rephrase.
-Keep the same language. Output only the corrected text.
+Clean up speech-to-text. Fix punctuation, remove filler words (ähm, äh, uh, um)
+and exact repetitions. Keep everything else unchanged — do not rephrase, do not
+remove meaningful words, do not add words. If the input is already clean, return
+it unchanged.
 
-If context is EMAIL: add greeting and closing, use professional tone.
-German emails default to "Sie" unless "du" is explicit.
+Input: Ähm ja also ich wollte sagen, dass das Projekt, das Projekt gut läuft …
+Output: Ja, ich wollte sagen, dass das Projekt gut läuft …
 ```
 
-The user message provides the context and transcription:
+**Email system prompt:**
 
 ```
-Context: {EMAIL|GENERAL}
+Clean up speech-to-text into a professional email. Remove filler words and
+repetitions, fix grammar and punctuation. Keep the greeting exactly as spoken.
+Never invent or change names. If no greeting is spoken, use
+"Sehr geehrte Damen und Herren,". Add a closing if none is spoken. For German,
+use "Sie" unless "du" is explicit. Never use 'ß', use 'ss' instead.
+Keep the same language. Output only the email.
+
+Input: Ähm hallo Andrin hast du heute Zeit für ein Meeting, ein Meeting wegen dem Projekt?
+Output: Hallo Andrin, …
+```
+
+The user message provides the language and transcription (no context label — the system prompt already encodes the context):
+
+```
 Language: {language_code}
 
 {raw_transcription_text}
@@ -213,8 +231,9 @@ During the ~2-second result preview window, pressing Escape restores the previou
 | Microphone | `AVCaptureDevice` | `NSMicrophoneUsageDescription` | Audio recording |
 | Screen Recording | `CGWindowListCopyWindowInfo` | (System-managed, no plist key) | Reading window titles for Layer 2 context detection |
 | Input Monitoring | `CGEvent.tapCreate` | (System-managed, no plist key) | Capturing global Fn key-down/key-up events |
+| Accessibility | `AXIsProcessTrusted` | (System-managed, no plist key) | Simulated Cmd+V paste (optional — only when output mode is "paste") |
 
-All permissions are prompted by macOS on first use. The app does not require Accessibility permission (no simulated keystrokes) or Apple Events permission (no AppleScript in v1).
+All permissions are prompted by macOS on first use. Accessibility is only required when the user enables the "Paste directly" output mode; without it, results are copied to the clipboard.
 
 The app must **not** be sandboxed. The App Sandbox prevents `CGWindowListCopyWindowInfo` from returning window titles and blocks `CGEventTap` creation.
 
@@ -222,11 +241,10 @@ The app must **not** be sandboxed. The App Sandbox prevents `CGWindowListCopyWin
 
 ## 7. Distribution
 
-- **Format:** Standard `.app` bundle in a `.dmg` disk image.
-- **Signing:** Signed with an Apple Developer ID certificate.
-- **Notarization:** Submitted to Apple for notarization to avoid Gatekeeper warnings.
-- **Auto-update:** Consider [Sparkle](https://sparkle-project.org/) for in-app update checking (optional, not required for v1).
-- **Model delivery:** WhisperKit model downloaded on first launch from Hugging Face. Ollama and its model are installed separately by the user.
+- **Format:** `.pkg` installer (primary), installing a two-app bundle to `/Applications/IntelliWhisper/`. The launcher app (`de.intellilab.IntelliWhisper.Launcher`) is what the user sees in the Dock; the core app (`de.intellilab.IntelliWhisper`) holds the real binary and TCC permissions. Alternative distributions: `.zip` of the core app, or a direct launcher `.zip` with a "Fix Permissions" script.
+- **Signing:** Ad-hoc signed (`codesign --sign -`). Developer ID signing and notarization are planned but not yet implemented.
+- **Auto-update:** Sparkle-based auto-updates are planned but not yet implemented (see `updating-concept.md`).
+- **Model delivery:** WhisperKit model downloaded on first launch from Hugging Face. Ollama and its model are installed separately by the user (the first-run wizard offers to pull the default Ollama model automatically).
 
 ---
 
@@ -234,7 +252,6 @@ The app must **not** be sandboxed. The App Sandbox prevents `CGWindowListCopyWin
 
 | Dependency | Purpose | Integration |
 |-----------|---------|-------------|
-| [WhisperKit](https://github.com/argmaxinc/WhisperKit) | Speech-to-text transcription | Swift Package Manager |
-| [OllamaKit](https://github.com/kevinhermawan/OllamaKit) or direct URLSession | LLM formatting via Ollama API | Swift Package Manager or built-in |
-| [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) | Configurable hotkey UI (preferences) | Swift Package Manager |
-| Ollama (external) | Local LLM runtime | User-installed, communicates via HTTP |
+| [WhisperKit](https://github.com/argmaxinc/WhisperKit) v0.12.0 | Speech-to-text transcription | Swift Package Manager |
+| [SwiftyBeaver](https://github.com/SwiftyBeaver/SwiftyBeaver) v2.1.0 | Structured logging (console + file at `~/Library/Logs/IntelliWhisper/`) | Swift Package Manager |
+| Ollama (external) | Local LLM runtime | User-installed, communicates via direct `URLSession` calls to `http://localhost:11434` |

@@ -46,17 +46,20 @@ final class FirstRunCoordinator: ObservableObject {
 
     // MARK: - Subsystems
 
+    private let settings: SettingsService
     private let transcriber: any Transcribing
     private let formatter: any Formatting
     private let hotkey: HotkeyManager
     private let orchestrator: PipelineOrchestrator
 
     init(
+        settings: SettingsService,
         transcriber: any Transcribing,
         formatter: any Formatting,
         hotkey: HotkeyManager,
         orchestrator: PipelineOrchestrator
     ) {
+        self.settings = settings
         self.transcriber = transcriber
         self.formatter = formatter
         self.hotkey = hotkey
@@ -140,7 +143,7 @@ final class FirstRunCoordinator: ObservableObject {
     }
 
     private func pullDefaultModel() async {
-        let modelName = OllamaFormatter.defaultModel
+        let modelName = SettingsService.defaultOllamaModel
         pullStatus = "Pulling \(modelName)…"
         pullProgress = 0
 
@@ -174,7 +177,7 @@ final class FirstRunCoordinator: ObservableObject {
     func downloadModel() async {
         stepStatuses[.modelDownload] = .inProgress
         do {
-            let modelName = UserDefaults.standard.string(forKey: "whisperModel") ?? WhisperModel.default.rawValue
+            let modelName = settings.whisperModel
             let model = WhisperModel(rawValue: modelName) ?? .default
             try await transcriber.setup(model: model)
             orchestrator.modelReady = true
@@ -200,7 +203,7 @@ final class FirstRunCoordinator: ObservableObject {
     }
 
     func finish() {
-        UserDefaults.standard.set(true, forKey: "setupCompleted")
+        settings.setupCompleted = true
         isComplete = true
     }
 }

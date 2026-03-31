@@ -167,13 +167,13 @@ final class MenuBarController {
             return
         }
 
-        let prefsView = PreferencesView(orchestrator: orchestrator)
+        let prefsView = PreferencesView(settings: orchestrator.settings, orchestrator: orchestrator)
         let hostingController = NSHostingController(rootView: prefsView)
 
         let window = PreferencesWindow(contentViewController: hostingController)
         window.title = "IntelliWhisper Preferences"
-        window.styleMask = [.titled, .closable]
-        window.setContentSize(NSSize(width: 400, height: 400))
+        window.styleMask = [.titled, .closable, .resizable]
+        window.setContentSize(NSSize(width: 400, height: 560))
         window.center()
         window.isReleasedWhenClosed = false
         window.initialFirstResponder = nil

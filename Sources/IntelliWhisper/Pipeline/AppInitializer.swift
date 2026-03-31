@@ -47,6 +47,7 @@ final class AppInitializer: ObservableObject {
     /// Execute the full initialization sequence.
     /// Call once from AppDelegate after subsystems and UI are created.
     func run(
+        settings: SettingsService,
         hotkey: HotkeyManager,
         transcriber: any Transcribing,
         formatter: any Formatting,
@@ -65,7 +66,7 @@ final class AppInitializer: ObservableObject {
 
         // Step 2: WhisperKit model download + load
         await runStep(.whisperKit) {
-            let modelName = UserDefaults.standard.string(forKey: "whisperModel") ?? WhisperModel.default.rawValue
+            let modelName = settings.whisperModel
             let model = WhisperModel(rawValue: modelName) ?? .default
             try await transcriber.setup(model: model)
             orchestrator.modelReady = true

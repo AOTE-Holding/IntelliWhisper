@@ -32,7 +32,8 @@ Sources/IntelliWhisper/
   Models/               # Types.swift (shared types), HotkeyChoice.swift
   Protocols/            # Interfaces: AudioRecording, Transcribing, ContextDetecting, Formatting
   Services/             # Implementations: WhisperKitRecorder, WhisperKitTranscriber,
-                        #   OllamaFormatter, ContextDetector, ClipboardManager, HotkeyManager, Log
+                        #   OllamaFormatter, ContextDetector, ClipboardManager, HotkeyManager,
+                        #   SettingsService (centralized UserDefaults), Log
   Pipeline/             # PipelineOrchestrator (central state machine), AppInitializer
   UI/                   # MenuBarView, MenuBarController, FloatingPanel*, PreferencesView
   Setup/                # FirstRunCoordinator + FirstRunView (onboarding wizard)
@@ -46,6 +47,7 @@ testing/                # test_data.json + run_tests.sh (manual Ollama model eva
 Protocol-driven design with central orchestrator state machine:
 
 ```
+SettingsService (centralized UserDefaults, @Published, injected into all subsystems)
 Hotkey (CGEventTap) → HotkeyManager → PipelineOrchestrator
   ├→ ContextDetector   (detect active app: email vs general)
   ├→ WhisperKitRecorder (capture audio)
@@ -75,9 +77,11 @@ UI: MenuBarController, FloatingPanelController, PreferencesView observe @Publish
 - **Screen Recording** — window title reading for context detection (optional)
 - **Accessibility** — simulated Cmd+V paste (optional)
 
-## User Settings (UserDefaults)
+## User Settings (UserDefaults via SettingsService)
 
-`preferredLanguage`, `whisperModel`, `ollamaModel`, `hotkeyChoice`, `outputMode`, `formatGeneral`, `formatEmail`, `setupCompleted`
+All keys, defaults, and persistence logic are centralized in `SettingsService`. Non-MainActor services (OllamaFormatter, HotkeyManager) read via `SettingsService.Keys` statics against UserDefaults directly.
+
+`preferredLanguage`, `whisperModel`, `ollamaModel`, `hotkeyChoice`, `outputMode`, `formatGeneral`, `formatEmail`, `generalSystemPrompt`, `emailSystemPrompt`, `setupCompleted`
 
 ## Build & Run
 

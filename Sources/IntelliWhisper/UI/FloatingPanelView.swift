@@ -15,10 +15,9 @@ struct FloatingPanelView: View {
                 RecordingView(
                     duration: duration,
                     context: orchestrator.detectedContext,
-                    formattingEnabled: {
-                        let key = orchestrator.detectedContext == .email ? "formatEmail" : "formatGeneral"
-                        return UserDefaults.standard.object(forKey: key) as? Bool ?? true
-                    }()
+                    formattingEnabled: orchestrator.detectedContext == .email
+                        ? orchestrator.settings.formatEmail
+                        : orchestrator.settings.formatGeneral
                 )
 
             case .processing:

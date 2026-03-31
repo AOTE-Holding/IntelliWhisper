@@ -27,7 +27,7 @@ final class HotkeyManager: @unchecked Sendable {
 
     /// Currently selected hotkey, read from UserDefaults on each event.
     private var hotkeyChoice: HotkeyChoice {
-        HotkeyChoice(rawValue: UserDefaults.standard.string(forKey: "hotkeyChoice") ?? "") ?? .fn
+        HotkeyChoice(rawValue: UserDefaults.standard.string(forKey: SettingsService.Keys.hotkeyChoice) ?? "") ?? .fn
     }
 
     /// Install the global event tap. Returns false if Input Monitoring

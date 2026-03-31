@@ -12,6 +12,7 @@ final class PipelineOrchestrator: ObservableObject {
 
     // MARK: - Subsystems (protocol-typed for swappability)
 
+    let settings: SettingsService
     private let recorder: any AudioRecording
     private let transcriber: any Transcribing
     private let contextDetector: any ContextDetecting
@@ -56,12 +57,14 @@ final class PipelineOrchestrator: ObservableObject {
     // MARK: - Init
 
     init(
+        settings: SettingsService,
         recorder: any AudioRecording,
         transcriber: any Transcribing,
         contextDetector: any ContextDetecting,
         formatter: any Formatting,
         clipboard: ClipboardManager
     ) {
+        self.settings = settings
         self.recorder = recorder
         self.transcriber = transcriber
         self.contextDetector = contextDetector
@@ -257,8 +260,7 @@ final class PipelineOrchestrator: ObservableObject {
         context: FormatContext
     ) async -> String {
         // Check if formatting is enabled for this context.
-        let key = context == .email ? "formatEmail" : "formatGeneral"
-        let formatEnabled = UserDefaults.standard.object(forKey: key) as? Bool ?? true
+        let formatEnabled = context == .email ? settings.formatEmail : settings.formatGeneral
         guard formatEnabled else {
             log.info("Formatting disabled for \(context.rawValue) — returning raw transcription")
             return transcription.text

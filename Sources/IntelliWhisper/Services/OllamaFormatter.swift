@@ -6,35 +6,28 @@ struct OllamaFormatter: Formatting {
     private let baseURL: URL
     private let session: URLSession
 
-    static var defaultModel: String {
-        let ramGB = ProcessInfo.processInfo.physicalMemory / (1024 * 1024 * 1024)
-        return ramGB >= 16 ? "qwen3.5:4b" : "qwen3.5:2b"
-    }
-
     /// Reads the current model from UserDefaults so preference changes take effect immediately.
     private var model: String {
-        UserDefaults.standard.string(forKey: "ollamaModel") ?? Self.defaultModel
+        UserDefaults.standard.string(forKey: SettingsService.Keys.ollamaModel) ?? SettingsService.defaultOllamaModel
     }
 
-    private static let generalSystemPrompt = """
-        Clean up speech-to-text. Fix punctuation, remove filler words (ähm, äh, uh, um) and exact repetitions. Keep everything else unchanged — do not rephrase, do not remove meaningful words, do not add words. If the input is already clean, return it unchanged.
+    private var generalSystemPrompt: String {
+        let stored = UserDefaults.standard.string(forKey: SettingsService.Keys.generalSystemPrompt)
+        if let stored, !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return stored
+        }
+        return SettingsService.defaultGeneralSystemPrompt
+    }
 
-        Input: Ähm ja also ich wollte sagen, dass das Projekt, das Projekt gut läuft und wir sind im Zeitplan.
-        Output: Ja, ich wollte sagen, dass das Projekt gut läuft und wir sind im Zeitplan.
-        """
+    private var emailSystemPrompt: String {
+        let stored = UserDefaults.standard.string(forKey: SettingsService.Keys.emailSystemPrompt)
+        if let stored, !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return stored
+        }
+        return SettingsService.defaultEmailSystemPrompt
+    }
 
-    private static let emailSystemPrompt = """
-        Clean up speech-to-text into a professional email. Remove filler words and repetitions, fix grammar and punctuation. Keep the greeting exactly as spoken — if the speaker says "Hallo Andrin", use "Hallo Andrin,". Never invent or change names. If no greeting is spoken, use "Sehr geehrte Damen und Herren,". Add a closing if none is spoken. Preserve all specific details (names, numbers, dates, technical terms) exactly as spoken. Do not add placeholder text. For German, use "Sie" unless "du" is explicit. Never use 'ß', use 'ss' instead. Keep the same language. Output only the email.
-
-        Input: Ähm hallo Andrin hast du heute Zeit für ein Meeting, ein Meeting wegen dem Projekt?
-        Output: Hallo Andrin,
-
-        hast du heute Zeit für ein Meeting wegen dem Projekt?
-
-        Freundliche Grüsse
-        """
-
-    private static func systemPrompt(for context: FormatContext) -> String {
+    private func systemPrompt(for context: FormatContext) -> String {
         switch context {
         case .general: return generalSystemPrompt
         case .email: return emailSystemPrompt
@@ -264,7 +257,7 @@ struct OllamaFormatter: Formatting {
         let body = ChatRequest(
             model: model,
             messages: [
-                .init(role: "system", content: Self.systemPrompt(for: context)),
+                .init(role: "system", content: systemPrompt(for: context)),
                 .init(role: "user", content: userMessage),
             ],
             stream: true,

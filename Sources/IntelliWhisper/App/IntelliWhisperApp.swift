@@ -19,6 +19,7 @@ struct IntelliWhisperApp: App {
 /// On first launch, shows the FirstRunView onboarding wizard instead of
 /// the headless AppInitializer.
 final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
+    private var settings: SettingsService!
     private var orchestrator: PipelineOrchestrator!
     private var hotkeyManager: HotkeyManager!
     private var initializer: AppInitializer!
@@ -36,6 +37,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
         setupLogging()
         log.info("App launching")
 
+        // 0. Centralized settings
+        settings = SettingsService()
+
         // 1. Create subsystems (sync, instant)
         let recorder = WhisperKitRecorder()
         let transcriber = WhisperKitTranscriber()
@@ -44,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
         let clipboard = ClipboardManager()
 
         orchestrator = PipelineOrchestrator(
+            settings: settings,
             recorder: recorder,
             transcriber: transcriber,
             contextDetector: contextDetector,
@@ -52,13 +57,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
         )
 
         // Restore persisted preferences into the orchestrator.
-        if let langRaw = UserDefaults.standard.string(forKey: "preferredLanguage") {
-            orchestrator.preferredLanguage = Language(rawValue: langRaw) // nil for "auto"
-        }
-        if let modeRaw = UserDefaults.standard.string(forKey: "outputMode"),
-           let mode = OutputMode(rawValue: modeRaw) {
-            orchestrator.outputMode = mode
-        }
+        orchestrator.preferredLanguage = Language(rawValue: settings.preferredLanguage)
+        orchestrator.outputMode = OutputMode(rawValue: settings.outputMode) ?? .clipboard
         log.info("Preferences restored: lang=\(orchestrator.preferredLanguage?.rawValue ?? "auto"), output=\(orchestrator.outputMode.rawValue)")
 
         // 2. Create hotkey manager (start() is deferred to initializer or first-run)
@@ -69,9 +69,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
         floatingPanelController = FloatingPanelController(orchestrator: orchestrator)
 
         // 4. First-run or normal initialization
-        if !UserDefaults.standard.bool(forKey: "setupCompleted") {
+        if !settings.setupCompleted {
             log.info("First launch — showing setup wizard")
             let coordinator = FirstRunCoordinator(
+                settings: settings,
                 transcriber: transcriber,
                 formatter: formatter,
                 hotkey: hotkeyManager,
@@ -96,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
             initializer = AppInitializer()
             Task {
                 await initializer.run(
+                    settings: settings,
                     hotkey: hotkeyManager,
                     transcriber: transcriber,
                     formatter: formatter,

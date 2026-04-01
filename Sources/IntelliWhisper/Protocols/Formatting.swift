@@ -28,4 +28,11 @@ protocol Formatting: Sendable {
 
     /// Return the names of all models available on the backend.
     func fetchModels() async -> [String]
+
+    /// Return the backend version string, if available.
+    func fetchVersion() async -> String?
+}
+
+extension Formatting {
+    func fetchVersion() async -> String? { nil }
 }

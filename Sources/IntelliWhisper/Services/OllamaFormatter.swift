@@ -236,6 +236,22 @@ struct OllamaFormatter: Formatting {
         return models
     }
 
+    // MARK: - Version
+
+    func fetchVersion() async -> String? {
+        let url = baseURL.appendingPathComponent("api/version")
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 5
+
+        guard let (data, response) = try? await session.data(for: request),
+              let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200,
+              let json = try? JSONDecoder().decode(VersionResponse.self, from: data) else {
+            return nil
+        }
+        return json.version
+    }
+
     // MARK: - Request building
 
     private func buildRequest(
@@ -317,6 +333,10 @@ private struct TagsResponse: Decodable {
     struct ModelEntry: Decodable {
         let name: String
     }
+}
+
+private struct VersionResponse: Decodable {
+    let version: String
 }
 
 enum OllamaError: Error, LocalizedError {

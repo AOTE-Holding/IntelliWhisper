@@ -158,14 +158,14 @@ final class FirstRunCoordinator: ObservableObject {
 
             // Verify the model is now available
             await orchestrator.checkOllamaHealth()
+            pullProgress = nil
+            pullStatus = nil
             if orchestrator.ollamaAvailable {
-                pullProgress = nil
-                pullStatus = nil
                 stepStatuses[.ollama] = .granted
             } else {
-                pullProgress = nil
-                pullStatus = nil
-                stepStatuses[.ollama] = .failed("Model pull completed but model not found.")
+                let version = await formatter.fetchVersion()
+                let versionHint = version.map { " Your Ollama version is \($0) — this model may require a newer version. Run `brew upgrade ollama` and retry." } ?? ""
+                stepStatuses[.ollama] = .failed("Model \(modelName) was pulled but not found.\(versionHint)")
             }
         } catch {
             pullProgress = nil

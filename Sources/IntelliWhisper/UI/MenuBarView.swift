@@ -2,6 +2,31 @@ import AppKit
 import Combine
 import SwiftUI
 
+/// Window subclass that prevents auto-focus on TextFields during initial
+/// appearance and resigns TextField focus when clicking empty areas.
+final class PreferencesWindow: NSWindow {
+    private var suppressInitialFocus = true
+
+    override func makeFirstResponder(_ responder: NSResponder?) -> Bool {
+        if suppressInitialFocus, responder is NSTextField || responder is NSTextView {
+            return false
+        }
+        return super.makeFirstResponder(responder)
+    }
+
+    func enableFocus() {
+        suppressInitialFocus = false
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        suppressInitialFocus = false
+        super.mouseDown(with: event)
+        if firstResponder is NSTextView {
+            makeFirstResponder(contentView)
+        }
+    }
+}
+
 /// Manages the NSStatusItem in the menu bar. Updates the icon based on
 /// pipeline state and Ollama availability, and builds the dropdown menu
 /// with clipboard history, Preferences, and Quit.
@@ -134,25 +159,52 @@ final class MenuBarController {
 
     @objc private func openPreferences() {
         if let window = preferencesWindow {
-            NSApp.activate()
-            window.makeKeyAndOrderFront(nil)
-            window.orderFrontRegardless()
+            NSApp.setActivationPolicy(.regular)
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50)) {
+                NSApp.activate(ignoringOtherApps: true)
+                window.makeKeyAndOrderFront(nil)
+            }
             return
         }
 
         let prefsView = PreferencesView(orchestrator: orchestrator)
         let hostingController = NSHostingController(rootView: prefsView)
 
-        let window = NSWindow(contentViewController: hostingController)
+        let window = PreferencesWindow(contentViewController: hostingController)
         window.title = "IntelliWhisper Preferences"
         window.styleMask = [.titled, .closable]
         window.setContentSize(NSSize(width: 400, height: 400))
         window.center()
-        NSApp.activate()
-        window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()
+        window.isReleasedWhenClosed = false
+        window.initialFirstResponder = nil
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(preferencesWindowWillClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: window
+        )
+
+        NSApp.setActivationPolicy(.regular)
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50)) {
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(200)) {
+                window.enableFocus()
+            }
+        }
 
         preferencesWindow = window
+    }
+
+    @objc private func preferencesWindowWillClose(_ notification: Notification) {
+        NotificationCenter.default.removeObserver(
+            self,
+            name: NSWindow.willCloseNotification,
+            object: preferencesWindow
+        )
+        preferencesWindow = nil
+        NSApp.setActivationPolicy(.accessory)
     }
 
     @objc private func quit() {

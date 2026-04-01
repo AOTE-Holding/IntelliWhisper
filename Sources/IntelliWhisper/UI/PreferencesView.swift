@@ -1,30 +1,52 @@
 import SwiftUI
 
-/// Settings window for configuring language, whisper model, and Ollama model.
+/// Settings window with General and Formatting tabs.
 struct PreferencesView: View {
+    @ObservedObject var settings: SettingsService
     @ObservedObject var orchestrator: PipelineOrchestrator
 
-    @AppStorage("preferredLanguage") private var languageSetting = "de"
-    @AppStorage("whisperModel") private var whisperModelSetting = WhisperModel.default.rawValue
-    @AppStorage("ollamaModel") private var ollamaModel = OllamaFormatter.defaultModel
-    @AppStorage("hotkeyChoice") private var hotkeyChoice = HotkeyChoice.default.rawValue
-    @AppStorage("outputMode") private var outputModeSetting = OutputMode.clipboard.rawValue
-    @AppStorage("formatGeneral") private var formatGeneral = true
-    @AppStorage("formatEmail") private var formatEmail = true
+    private enum Tab: Hashable {
+        case general
+        case formatting
+    }
+    @State private var selectedTab: Tab = .general
+
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            GeneralTab(settings: settings, orchestrator: orchestrator)
+                .tabItem { Label("General", systemImage: "gear") }
+                .tag(Tab.general)
+
+            FormattingTab(settings: settings, orchestrator: orchestrator)
+                .tabItem { Label("Formatting", systemImage: "text.quote") }
+                .tag(Tab.formatting)
+        }
+        .frame(minWidth: 380, idealWidth: 380, maxWidth: 380, minHeight: 540)
+        .task {
+            await orchestrator.refreshAvailableModels()
+        }
+    }
+}
+
+// MARK: - General Tab
+
+private struct GeneralTab: View {
+    @ObservedObject var settings: SettingsService
+    @ObservedObject var orchestrator: PipelineOrchestrator
 
     var body: some View {
         Form {
             Section("Transcription") {
-                Picker("Language", selection: $languageSetting) {
+                Picker("Language", selection: $settings.preferredLanguage) {
                     Text("German").tag("de")
                     Text("English").tag("en")
                     Text("Auto-detect").tag("auto")
                 }
-                .onChange(of: languageSetting) { _, newValue in
+                .onChange(of: settings.preferredLanguage) { _, newValue in
                     orchestrator.preferredLanguage = Language(rawValue: newValue)
                 }
 
-                Picker("Whisper Model", selection: $whisperModelSetting) {
+                Picker("Whisper Model", selection: $settings.whisperModel) {
                     ForEach(WhisperModel.allCases) { model in
                         HStack {
                             Text(model.displayName)
@@ -44,7 +66,7 @@ struct PreferencesView: View {
                     }
                 }
                 .disabled(orchestrator.modelLoading)
-                .onChange(of: whisperModelSetting) { _, newValue in
+                .onChange(of: settings.whisperModel) { _, newValue in
                     guard let model = WhisperModel(rawValue: newValue) else { return }
                     Task {
                         await orchestrator.switchWhisperModel(model)
@@ -63,13 +85,13 @@ struct PreferencesView: View {
             }
 
             Section("Hotkey") {
-                Picker("Push-to-talk key", selection: $hotkeyChoice) {
+                Picker("Push-to-talk key", selection: $settings.hotkeyChoice) {
                     ForEach(HotkeyChoice.allCases) { choice in
                         Text(choice.displayName).tag(choice.rawValue)
                     }
                 }
 
-                if hotkeyChoice == HotkeyChoice.fn.rawValue {
+                if settings.hotkeyChoice == HotkeyChoice.fn.rawValue {
                     Text("Set \"Press fn key to\" → \"Do Nothing\" in System Settings → Keyboard.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -77,36 +99,58 @@ struct PreferencesView: View {
             }
 
             Section("Output") {
-                Picker("After transcription", selection: $outputModeSetting) {
+                Picker("After transcription", selection: $settings.outputMode) {
                     Text("Copy to clipboard").tag(OutputMode.clipboard.rawValue)
                     Text("Paste directly").tag(OutputMode.paste.rawValue)
                 }
-                .onChange(of: outputModeSetting) { _, newValue in
+                .onChange(of: settings.outputMode) { _, newValue in
                     orchestrator.outputMode = OutputMode(rawValue: newValue) ?? .clipboard
                 }
 
-                if outputModeSetting == OutputMode.paste.rawValue {
+                if settings.outputMode == OutputMode.paste.rawValue {
                     Text("Requires Accessibility permission. Text is also saved to clipboard.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
+        }
+        .formStyle(.grouped)
+    }
+}
 
+// MARK: - Formatting Tab
+
+private struct FormattingTab: View {
+    @ObservedObject var settings: SettingsService
+    @ObservedObject var orchestrator: PipelineOrchestrator
+
+    private enum FocusedField: Hashable {
+        case ollamaModel
+        case generalPrompt
+        case emailPrompt
+    }
+    @FocusState private var focusedField: FocusedField?
+    @State private var showGeneralInfo = false
+    @State private var showEmailInfo = false
+
+    var body: some View {
+        Form {
             Section("Formatting") {
-                Toggle("Format general transcriptions", isOn: $formatGeneral)
-                Toggle("Format email transcriptions", isOn: $formatEmail)
+                Toggle("Format general transcriptions", isOn: $settings.formatGeneral)
+                Toggle("Format email transcriptions", isOn: $settings.formatEmail)
 
-                if !formatGeneral && !formatEmail {
+                if !settings.formatGeneral && !settings.formatEmail {
                     Text("All formatting disabled — raw transcription will be used.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 if orchestrator.availableModels.isEmpty {
-                    TextField("Ollama model", text: $ollamaModel)
+                    TextField("Ollama model", text: $settings.ollamaModel)
                         .textFieldStyle(.roundedBorder)
+                        .focused($focusedField, equals: .ollamaModel)
                 } else {
-                    Picker("Ollama model", selection: $ollamaModel) {
+                    Picker("Ollama model", selection: $settings.ollamaModel) {
                         ForEach(orchestrator.availableModels, id: \.self) { model in
                             HStack {
                                 Text(model)
@@ -114,7 +158,7 @@ struct PreferencesView: View {
                                     Text(desc)
                                         .foregroundStyle(.secondary)
                                 }
-                                if model == OllamaFormatter.defaultModel {
+                                if model == SettingsService.defaultOllamaModel {
                                     Text("Recommended")
                                         .font(.caption)
                                         .padding(.horizontal, 4)
@@ -142,12 +186,81 @@ struct PreferencesView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            if settings.formatGeneral {
+                Section {
+                    TextEditor(text: $settings.generalSystemPrompt)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(minHeight: 120, maxHeight: 200)
+                        .focused($focusedField, equals: .generalPrompt)
+
+                    if settings.generalSystemPrompt != SettingsService.defaultGeneralSystemPrompt {
+                        Text("Custom prompt — formatting results may differ from defaults.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+
+                    Button("Reset to Default") {
+                        settings.generalSystemPrompt = SettingsService.defaultGeneralSystemPrompt
+                    }
+                } header: {
+                    HStack(spacing: 4) {
+                        Text("General System Prompt")
+                        Button {
+                            showGeneralInfo.toggle()
+                        } label: {
+                            Image(systemName: "info.circle")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .popover(isPresented: $showGeneralInfo) {
+                            Text("Instructions sent to Ollama for general transcriptions. Controls how speech is cleaned up — punctuation, filler word removal, and repetition handling.")
+                                .font(.caption)
+                                .padding()
+                                .frame(width: 250)
+                        }
+                    }
+                }
+            }
+
+            if settings.formatEmail {
+                Section {
+                    TextEditor(text: $settings.emailSystemPrompt)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(minHeight: 120, maxHeight: 200)
+                        .focused($focusedField, equals: .emailPrompt)
+
+                    if settings.emailSystemPrompt != SettingsService.defaultEmailSystemPrompt {
+                        Text("Custom prompt — formatting results may differ from defaults.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+
+                    Button("Reset to Default") {
+                        settings.emailSystemPrompt = SettingsService.defaultEmailSystemPrompt
+                    }
+                } header: {
+                    HStack(spacing: 4) {
+                        Text("Email System Prompt")
+                        Button {
+                            showEmailInfo.toggle()
+                        } label: {
+                            Image(systemName: "info.circle")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .popover(isPresented: $showEmailInfo) {
+                            Text("Instructions sent to Ollama for email transcriptions. Controls how speech is formatted into a professional email — greetings, closings, tone, and language.")
+                                .font(.caption)
+                                .padding()
+                                .frame(width: 250)
+                        }
+                    }
+                }
+            }
         }
         .formStyle(.grouped)
-        .frame(width: 380, height: 540)
-        .task {
-            await orchestrator.refreshAvailableModels()
-        }
+        .defaultFocus($focusedField, nil)
     }
 
     private func modelDescription(_ name: String) -> String? {

@@ -184,7 +184,7 @@ final class PipelineOrchestrator: ObservableObject {
 
                 let pasted: Bool
                 if self.outputMode == .paste {
-                    pasted = clipboard.copyAndPaste(text: formatted)
+                    pasted = await clipboard.copyAndPaste(text: formatted)
                 } else {
                     clipboard.copy(text: formatted)
                     pasted = false

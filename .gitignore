@@ -74,5 +74,8 @@ fastlane/test_output
 # Claude Code
 .claude/
 
+# GitNexus
+.gitnexus/
+
 # Testing output
 testing/out/

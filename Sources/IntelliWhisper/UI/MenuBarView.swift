@@ -2,10 +2,15 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// Window subclass that prevents auto-focus on TextFields during initial
+/// Panel subclass that prevents auto-focus on TextFields during initial
 /// appearance and resigns TextField focus when clicking empty areas.
-final class PreferencesWindow: NSWindow {
+/// NSPanel is used instead of NSWindow so the panel can become key
+/// even when the app is in accessory (menu-bar-only) activation mode.
+final class PreferencesWindow: NSPanel {
     private var suppressInitialFocus = true
+
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
 
     override func makeFirstResponder(_ responder: NSResponder?) -> Bool {
         if suppressInitialFocus, responder is NSTextField || responder is NSTextView {
@@ -20,6 +25,7 @@ final class PreferencesWindow: NSWindow {
 
     override func mouseDown(with event: NSEvent) {
         suppressInitialFocus = false
+        NSApp.activate(ignoringOtherApps: true)
         super.mouseDown(with: event)
         if firstResponder is NSTextView {
             _ = makeFirstResponder(contentView)
@@ -160,10 +166,8 @@ final class MenuBarController {
     @objc private func openPreferences() {
         if let window = preferencesWindow {
             NSApp.setActivationPolicy(.regular)
-            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50)) {
-                NSApp.activate(ignoringOtherApps: true)
-                window.makeKeyAndOrderFront(nil)
-            }
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
             return
         }
 
@@ -185,16 +189,41 @@ final class MenuBarController {
             object: window
         )
 
+        setDockIcon()
         NSApp.setActivationPolicy(.regular)
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50)) {
-            NSApp.activate(ignoringOtherApps: true)
-            window.makeKeyAndOrderFront(nil)
-            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(200)) {
-                window.enableFocus()
-            }
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(200)) {
+            window.enableFocus()
         }
 
         preferencesWindow = window
+    }
+
+    /// Sets the Dock tile icon to IntelliWhisper.icns so the Dock shows
+    /// the real app icon instead of a generic "exec" tile.
+    private func setDockIcon() {
+        let iconName = "IntelliWhisper.icns"
+        let searchRoots: [URL] = [
+            // Production: app bundle Resources/
+            Bundle.main.resourceURL,
+            // Development (swift run): current working directory + Resources/
+            URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+                .appendingPathComponent("Resources"),
+            // Development: walk up from executable
+            Bundle.main.executableURL?.deletingLastPathComponent(),
+        ].compactMap { $0 }
+
+        for root in searchRoots {
+            let candidate = root.appendingPathComponent(iconName)
+            if let icon = NSImage(contentsOfFile: candidate.path) {
+                NSApp.applicationIconImage = icon
+                let imageView = NSImageView(image: icon)
+                NSApp.dockTile.contentView = imageView
+                NSApp.dockTile.display()
+                return
+            }
+        }
     }
 
     @objc private func preferencesWindowWillClose(_ notification: Notification) {

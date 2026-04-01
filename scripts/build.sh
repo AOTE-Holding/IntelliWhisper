@@ -121,6 +121,7 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 cp "$BUILD_DIR/$CONFIG/${APP_NAME}" "$APP_BUNDLE/Contents/MacOS/${APP_NAME}"
 cp "$PROJECT_ROOT/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 cp "$ENTITLEMENTS" "$APP_BUNDLE/Contents/Resources/${APP_NAME}.entitlements"
+cp "$PROJECT_ROOT/Resources/${APP_NAME}.icns" "$APP_BUNDLE/Contents/Resources/${APP_NAME}.icns"
 
 # ---------------------------------------------------------------------------
 # Sign (release only)

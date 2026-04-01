@@ -67,21 +67,6 @@ final class HotkeyManager: @unchecked Sendable {
         return true
     }
 
-    /// Remove the event tap.
-    @MainActor
-    func stop() {
-        if let tap = eventTap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-        }
-        if let source = runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
-        }
-        eventTap = nil
-        runLoopSource = nil
-        hotkeyDown = false
-        log.info("Event tap removed")
-    }
-
     // MARK: - Event handling (called from C callback on main run loop)
 
     fileprivate func handleEvent(_ type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {

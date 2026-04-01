@@ -31,8 +31,12 @@ protocol Formatting: Sendable {
 
     /// Return the backend version string, if available.
     func fetchVersion() async -> String?
+
+    /// Tell the backend to unload the model from memory.
+    func unload() async
 }
 
 extension Formatting {
     func fetchVersion() async -> String? { nil }
+    func unload() async {}
 }

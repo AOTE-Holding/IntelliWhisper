@@ -80,8 +80,10 @@ final class AppInitializer: ObservableObject {
             }
         }
 
-        // Preload Ollama model into VRAM in background (non-blocking)
-        if orchestrator.ollamaAvailable {
+        // Preload Ollama model into VRAM in background (non-blocking),
+        // but only if at least one formatting context is enabled.
+        if orchestrator.ollamaAvailable &&
+           (settings.formatGeneral || settings.formatEmail) {
             Task { await formatter.warmup() }
         }
     }

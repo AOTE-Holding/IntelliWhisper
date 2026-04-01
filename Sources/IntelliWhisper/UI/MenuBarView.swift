@@ -22,7 +22,7 @@ final class PreferencesWindow: NSWindow {
         suppressInitialFocus = false
         super.mouseDown(with: event)
         if firstResponder is NSTextView {
-            makeFirstResponder(contentView)
+            _ = makeFirstResponder(contentView)
         }
     }
 }

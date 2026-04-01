@@ -122,6 +122,28 @@ struct OllamaFormatter: Formatting {
         log.info("Model warmup complete")
     }
 
+    /// Send a request with keep_alive: 0 to unload the model from VRAM.
+    func unload() async {
+        let url = baseURL.appendingPathComponent("api/chat")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 10
+
+        let body = ChatRequest(
+            model: model,
+            messages: [],
+            stream: false,
+            think: false,
+            keep_alive: 0,
+            options: .init(temperature: 0, num_ctx: nil)
+        )
+        request.httpBody = try? JSONEncoder().encode(body)
+
+        _ = try? await session.data(for: request)
+        log.info("Model unload requested (keep_alive: 0)")
+    }
+
     // MARK: - Health Check
 
     /// Verify Ollama is reachable and the configured model is pulled.

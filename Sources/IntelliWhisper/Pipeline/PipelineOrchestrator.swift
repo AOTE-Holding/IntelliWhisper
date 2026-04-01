@@ -50,6 +50,9 @@ final class PipelineOrchestrator: ObservableObject {
     /// or when a new recording starts before processing finishes.
     private var processingTask: Task<Void, Never>?
 
+    /// Subscriptions for reacting to settings changes (e.g. formatting toggles).
+    private var cancellables = Set<AnyCancellable>()
+
     /// Timer that updates the recording duration for the UI.
     private var durationTimer: Timer?
     private var recordingStartTime: Date?
@@ -70,6 +73,23 @@ final class PipelineOrchestrator: ObservableObject {
         self.contextDetector = contextDetector
         self.formatter = formatter
         self.clipboard = clipboard
+
+        // Unload the Ollama model when all formatting is disabled;
+        // re-warm it when at least one context is re-enabled.
+        settings.$formatGeneral
+            .combineLatest(settings.$formatEmail)
+            .map { $0 || $1 }
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] anyEnabled in
+                guard let self else { return }
+                if anyEnabled {
+                    Task { await self.formatter.warmup() }
+                } else {
+                    Task { await self.formatter.unload() }
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Hotkey-triggered actions
@@ -103,8 +123,12 @@ final class PipelineOrchestrator: ObservableObject {
             }
         }
 
-        // Pre-warm Ollama model into VRAM while recording (GPU + ANE don't compete).
-        Task { await formatter.warmup() }
+        // Pre-warm Ollama model into VRAM while recording (GPU + ANE don't compete),
+        // but only if formatting is enabled for the detected context.
+        let shouldWarmup = detectedContext == .email ? settings.formatEmail : settings.formatGeneral
+        if shouldWarmup {
+            Task { await formatter.warmup() }
+        }
     }
 
     /// Called on Fn key-up. Stops recording and kicks off the

@@ -98,7 +98,7 @@ final class PipelineOrchestrator: ObservableObject {
     func handleRecordStart() {
         guard modelReady else {
             log.warning("Fn pressed but model not ready")
-            state = .error("Warming up — please wait a moment…")
+            state = .error("Warming up…")
             return
         }
 
@@ -109,7 +109,7 @@ final class PipelineOrchestrator: ObservableObject {
         log.info("Fn down — context=\(detectedContext.rawValue), starting recording")
 
         recordingStartTime = Date()
-        state = .recording(duration: 0)
+        state = .recording(duration: 0, audioLevel: 0)
         startDurationTimer()
 
         Task {
@@ -326,11 +326,14 @@ final class PipelineOrchestrator: ObservableObject {
     }
 
     private func startDurationTimer() {
-        durationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        durationTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self,
                       let start = self.recordingStartTime else { return }
-                self.state = .recording(duration: Date().timeIntervalSince(start))
+                self.state = .recording(
+                    duration: Date().timeIntervalSince(start),
+                    audioLevel: self.recorder.audioLevel
+                )
             }
         }
     }

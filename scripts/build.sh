@@ -123,6 +123,12 @@ cp "$PROJECT_ROOT/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 cp "$ENTITLEMENTS" "$APP_BUNDLE/Contents/Resources/${APP_NAME}.entitlements"
 cp "$PROJECT_ROOT/Resources/${APP_NAME}.icns" "$APP_BUNDLE/Contents/Resources/${APP_NAME}.icns"
 
+# Copy SPM resource bundle (contains custom image assets like Ollama logo)
+RESOURCE_BUNDLE="$BUILD_DIR/$CONFIG/IntelliWhisper_IntelliWhisper.bundle"
+if [ -d "$RESOURCE_BUNDLE" ]; then
+    cp -R "$RESOURCE_BUNDLE" "$APP_BUNDLE/Contents/Resources/"
+fi
+
 # ---------------------------------------------------------------------------
 # Sign (release only)
 # ---------------------------------------------------------------------------

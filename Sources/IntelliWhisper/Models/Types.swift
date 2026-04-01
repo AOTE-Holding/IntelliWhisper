@@ -73,8 +73,20 @@ struct PullProgress: Sendable {
 /// The current state of the processing pipeline, observed by the UI.
 enum PipelineState: Sendable {
     case idle
-    case recording(duration: TimeInterval)
+    case recording(duration: TimeInterval, audioLevel: Float)
     case processing
     case result(FormattedOutput)
     case error(String)
+
+    /// Stable identifier for the current case, used to drive SwiftUI animations
+    /// when the state changes between cases (ignoring associated values).
+    var discriminator: Int {
+        switch self {
+        case .idle: return 0
+        case .recording: return 1
+        case .processing: return 2
+        case .result: return 3
+        case .error: return 4
+        }
+    }
 }

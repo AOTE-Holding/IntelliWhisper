@@ -4,7 +4,8 @@ import SwiftUI
 
 /// A non-activating floating panel that displays recording, processing,
 /// and result states without stealing keyboard focus from the user's
-/// current application.
+/// current application. Styled as a Dynamic Island pill centered below
+/// the menu bar.
 @MainActor
 final class FloatingPanelController {
     private var panel: NSPanel?
@@ -12,6 +13,8 @@ final class FloatingPanelController {
     private var cancellables = Set<AnyCancellable>()
     private var autoHideTask: Task<Void, Never>?
     private var escapeMonitor: Any?
+    private var resizeObserver: NSObjectProtocol?
+    private var isHiding = false
 
     /// Preview duration in seconds before auto-hiding the result.
     var previewDuration: TimeInterval = 2.0
@@ -39,7 +42,11 @@ final class FloatingPanelController {
 
         switch state {
         case .idle:
-            hidePanel()
+            // Panel was already faded out by animateDismiss() in the normal flow.
+            // Guard against edge cases where state is set externally.
+            if panel?.isVisible == true {
+                panel?.orderOut(nil)
+            }
 
         case .recording:
             showPanel()
@@ -50,23 +57,20 @@ final class FloatingPanelController {
         case .result:
             showPanel()
             installEscapeMonitor()
-            // Auto-hide after preview duration
             autoHideTask = Task { [weak self] in
                 guard let self else { return }
                 try? await Task.sleep(for: .seconds(self.previewDuration))
                 guard !Task.isCancelled else { return }
-                self.removeEscapeMonitor()
-                self.orchestrator.dismissResult()
+                self.animateDismiss()
             }
 
         case .error:
             showPanel()
-            // Auto-hide errors after 2 seconds
             autoHideTask = Task { [weak self] in
                 guard let self else { return }
                 try? await Task.sleep(for: .seconds(2))
                 guard !Task.isCancelled else { return }
-                self.orchestrator.dismissResult()
+                self.animateDismiss()
             }
         }
     }
@@ -79,9 +83,8 @@ final class FloatingPanelController {
             MainActor.assumeIsolated {
                 self?.autoHideTask?.cancel()
                 self?.autoHideTask = nil
-                self?.removeEscapeMonitor()
                 self?.orchestrator.undoLastCopy()
-                self?.orchestrator.dismissResult()
+                self?.animateDismiss()
             }
         }
     }
@@ -99,41 +102,92 @@ final class FloatingPanelController {
         if panel == nil {
             createPanel()
         }
-        panel?.orderFrontRegardless()
+        guard let panel else { return }
+        isHiding = false
+
+        if !panel.isVisible {
+            panel.alphaValue = 0
+            panel.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.25
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                panel.animator().alphaValue = 1
+            }
+        }
     }
 
-    private func hidePanel() {
-        panel?.orderOut(nil)
+    /// Smoothly fades the panel out, then dismisses the pipeline state.
+    /// Content stays frozen during the fade so nothing collapses visibly.
+    private func animateDismiss() {
+        removeEscapeMonitor()
+        guard let panel, panel.isVisible, !isHiding else {
+            orchestrator.dismissResult()
+            return
+        }
+        isHiding = true
+
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.35
+            context.timingFunction = CAMediaTimingFunction(
+                controlPoints: 0.4, 0.0, 1.0, 1.0
+            )
+            panel.animator().alphaValue = 0
+        }, completionHandler: {
+            MainActor.assumeIsolated { [weak self] in
+                guard let self else { return }
+                self.panel?.orderOut(nil)
+                self.isHiding = false
+                self.orchestrator.dismissResult()
+            }
+        })
     }
 
     private func createPanel() {
         let panelView = FloatingPanelView(orchestrator: orchestrator)
-        let hostingView = NSHostingController(rootView: panelView)
+        let hostingController = NSHostingController(rootView: panelView)
+        hostingController.sizingOptions = .preferredContentSize
+        hostingController.view.wantsLayer = true
+        hostingController.view.layer?.backgroundColor = NSColor.clear.cgColor
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 280, height: 100),
-            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 60),
+            styleMask: [.nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
         panel.level = .floating
-        panel.isMovableByWindowBackground = true
-        panel.titlebarAppearsTransparent = true
-        panel.titleVisibility = .hidden
         panel.backgroundColor = .clear
+        panel.isOpaque = false
         panel.hasShadow = true
-        panel.contentViewController = hostingView
         panel.isReleasedWhenClosed = false
+        panel.appearance = NSAppearance(named: .darkAqua)
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.contentViewController = hostingController
 
-        // Position below menu bar, right-aligned
-        if let screen = NSScreen.main {
-            let screenFrame = screen.visibleFrame
-            let panelWidth: CGFloat = 280
-            let x = screenFrame.maxX - panelWidth - 16
-            let y = screenFrame.maxY - 8
-            panel.setFrameTopLeftPoint(NSPoint(x: x, y: y))
+        // Center below menu bar
+        centerPanel(panel)
+
+        // Re-center when panel resizes (e.g. state transition animations)
+        resizeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification,
+            object: panel,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, !self.isHiding, let panel = self.panel else { return }
+                self.centerPanel(panel)
+            }
         }
 
         self.panel = panel
+    }
+
+    private func centerPanel(_ panel: NSPanel) {
+        guard let screen = NSScreen.main else { return }
+        let visibleFrame = screen.visibleFrame
+        let panelFrame = panel.frame
+        let x = visibleFrame.origin.x + (visibleFrame.width - panelFrame.width) / 2
+        let y = visibleFrame.maxY - 4
+        panel.setFrameTopLeftPoint(NSPoint(x: x, y: y))
     }
 }

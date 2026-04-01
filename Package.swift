@@ -18,7 +18,10 @@ let package = Package(
                 "WhisperKit",
                 "SwiftyBeaver",
             ],
-            path: "Sources/IntelliWhisper"
+            path: "Sources/IntelliWhisper",
+            resources: [
+                .process("Assets"),
+            ]
         ),
     ]
 )

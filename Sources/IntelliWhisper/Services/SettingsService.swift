@@ -21,6 +21,8 @@ final class SettingsService: ObservableObject {
         static let emailSystemPrompt = "emailSystemPrompt"
         static let handsFreeRecording = "handsFreeRecording"
         static let setupCompleted = "setupCompleted"
+        static let vocabularyNames = "vocabularyNames"
+        static let vocabularyKeywords = "vocabularyKeywords"
     }
 
     // MARK: - Defaults
@@ -102,6 +104,14 @@ final class SettingsService: ObservableObject {
         didSet { save(Keys.setupCompleted, setupCompleted) }
     }
 
+    @Published var vocabularyNames: [String] {
+        didSet { save(Keys.vocabularyNames, encodeJSON(vocabularyNames)) }
+    }
+
+    @Published var vocabularyKeywords: [String] {
+        didSet { save(Keys.vocabularyKeywords, encodeJSON(vocabularyKeywords)) }
+    }
+
     // MARK: - Init
 
     init() {
@@ -125,6 +135,8 @@ final class SettingsService: ObservableObject {
         self.emailSystemPrompt = d.string(forKey: Keys.emailSystemPrompt) ?? Self.defaultEmailSystemPrompt
         self.handsFreeRecording = d.object(forKey: Keys.handsFreeRecording) as? Bool ?? false
         self.setupCompleted = d.bool(forKey: Keys.setupCompleted)
+        self.vocabularyNames = decodeJSON(d.string(forKey: Keys.vocabularyNames)) ?? []
+        self.vocabularyKeywords = decodeJSON(d.string(forKey: Keys.vocabularyKeywords)) ?? []
     }
 
     // MARK: - Persistence
@@ -132,4 +144,15 @@ final class SettingsService: ObservableObject {
     private func save(_ key: String, _ value: Any) {
         UserDefaults.standard.set(value, forKey: key)
     }
+}
+
+// MARK: - JSON helpers for [String] persistence
+
+private func encodeJSON(_ array: [String]) -> String {
+    (try? JSONEncoder().encode(array)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+}
+
+private func decodeJSON(_ string: String?) -> [String]? {
+    guard let data = string?.data(using: .utf8) else { return nil }
+    return try? JSONDecoder().decode([String].self, from: data)
 }

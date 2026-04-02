@@ -9,6 +9,7 @@ struct PreferencesView: View {
     private enum Tab: Hashable {
         case general
         case formatting
+        case vocabulary
     }
     @State private var selectedTab: Tab = .general
 
@@ -21,6 +22,10 @@ struct PreferencesView: View {
             FormattingTab(settings: settings, orchestrator: orchestrator)
                 .tabItem { Label("Formatting", systemImage: "text.quote") }
                 .tag(Tab.formatting)
+
+            VocabularyTab(settings: settings)
+                .tabItem { Label("Vocabulary", systemImage: "text.book.closed") }
+                .tag(Tab.vocabulary)
         }
         .frame(minWidth: 380, idealWidth: 380, maxWidth: 380, minHeight: 540)
         .task {
@@ -305,5 +310,149 @@ private struct FormattingTab: View {
         case let n where n.contains(":9b"):  return "Slowest, highest quality"
         default: return nil
         }
+    }
+}
+
+// MARK: - Vocabulary Tab
+
+private struct VocabularyTab: View {
+    @ObservedObject var settings: SettingsService
+    @State private var newName = ""
+    @State private var newKeyword = ""
+
+    /// WhisperKit's maxPromptLen = (448/2)/2 - 1 = 111 tokens
+    private let maxTokens = 111
+
+    /// Rough token estimate: ~1 token per 4 characters (conservative BPE heuristic)
+    private var estimatedTokens: Int {
+        let prompt = VocabularyPromptBuilder.buildPrompt(
+            names: settings.vocabularyNames,
+            keywords: settings.vocabularyKeywords
+        )
+        guard !prompt.isEmpty else { return 0 }
+        return max(1, prompt.count / 4)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Info & token budget (non-scrolling header)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Add names and keywords to improve recognition of specific terms. These are passed to the speech model as context hints.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    Text("Estimated usage")
+                        .font(.caption)
+                    Spacer()
+                    Text("~\(estimatedTokens) / \(maxTokens) tokens")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(tokenColor)
+                }
+
+                if estimatedTokens > maxTokens {
+                    Text("Token limit exceeded. Oldest entries may be ignored by the model.")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                } else if estimatedTokens > maxTokens * 3 / 4 {
+                    Text("Approaching token limit. More words may reduce accuracy.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+
+            // Two independently scrollable word lists
+            HStack(spacing: 0) {
+                WordListEditor(
+                    title: "Names",
+                    words: $settings.vocabularyNames,
+                    newWord: $newName,
+                    placeholder: "Add a name…"
+                )
+
+                Divider()
+
+                WordListEditor(
+                    title: "Keywords",
+                    words: $settings.vocabularyKeywords,
+                    newWord: $newKeyword,
+                    placeholder: "Add a keyword…"
+                )
+            }
+        }
+    }
+
+    private var tokenColor: Color {
+        if estimatedTokens > maxTokens { return .red }
+        if estimatedTokens > maxTokens * 3 / 4 { return .orange }
+        return .secondary
+    }
+}
+
+// MARK: - Word List Editor
+
+private struct WordListEditor: View {
+    let title: String
+    @Binding var words: [String]
+    @Binding var newWord: String
+    var placeholder: String
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(title)
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+
+            Divider()
+
+            // Scrollable word list
+            List {
+                ForEach(words, id: \.self) { word in
+                    HStack {
+                        Text(word)
+                        Spacer()
+                        Button {
+                            words.removeAll { $0 == word }
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .foregroundStyle(.red)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .listStyle(.plain)
+
+            Divider()
+
+            // Add field pinned at bottom
+            HStack(spacing: 6) {
+                TextField(placeholder, text: $newWord)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { addWord() }
+                Button {
+                    addWord()
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(.green)
+                }
+                .buttonStyle(.plain)
+                .disabled(newWord.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func addWord() {
+        let trimmed = newWord.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, !words.contains(trimmed) else { return }
+        words.append(trimmed)
+        newWord = ""
     }
 }

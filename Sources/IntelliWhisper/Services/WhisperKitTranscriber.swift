@@ -50,12 +50,29 @@ final class WhisperKitTranscriber: Transcribing, @unchecked Sendable {
             throw TranscriberError.notInitialized
         }
 
+        // Read vocabulary from UserDefaults (non-MainActor safe pattern)
+        let namesJSON = UserDefaults.standard.string(forKey: SettingsService.Keys.vocabularyNames)
+        let keywordsJSON = UserDefaults.standard.string(forKey: SettingsService.Keys.vocabularyKeywords)
+        let names = namesJSON.flatMap { try? JSONDecoder().decode([String].self, from: Data($0.utf8)) } ?? []
+        let keywords = keywordsJSON.flatMap { try? JSONDecoder().decode([String].self, from: Data($0.utf8)) } ?? []
+
+        // Build prompt tokens if vocabulary is configured
+        let promptTokens: [Int]?
+        let prompt = VocabularyPromptBuilder.buildPrompt(names: names, keywords: keywords)
+        if !prompt.isEmpty, let tokenizer = kit.tokenizer {
+            promptTokens = tokenizer.encode(text: prompt)
+            log.info("Vocabulary prompt (\(promptTokens!.count) tokens): \(prompt.prefix(80))")
+        } else {
+            promptTokens = nil
+        }
+
         let options = DecodingOptions(
             task: .transcribe,
             language: language?.rawValue,
             usePrefillPrompt: true,
             detectLanguage: language == nil,
             withoutTimestamps: true,
+            promptTokens: promptTokens,
             chunkingStrategy: .vad
         )
 

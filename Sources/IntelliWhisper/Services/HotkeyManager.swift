@@ -162,11 +162,14 @@ final class HotkeyManager: @unchecked Sendable {
         }
 
         if recordingLocked {
-            if type == .keyDown {
-                hotkeyDown = false
+            if type == .keyDown && !hotkeyDown {
+                // Fresh press (key was released and re-pressed) — stop locked recording
                 recordingLocked = false
                 suppressNextKeyUp = true
                 MainActor.assumeIsolated { onRecordStop?() }
+            } else if type == .keyUp {
+                // Track release so the next keyDown is recognised as a fresh press
+                hotkeyDown = false
             }
             return nil // swallow all events for this key while locked
         }

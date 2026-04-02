@@ -73,7 +73,7 @@ struct PullProgress: Sendable {
 /// The current state of the processing pipeline, observed by the UI.
 enum PipelineState: Sendable {
     case idle
-    case recording(duration: TimeInterval, audioLevel: Float)
+    case recording(duration: TimeInterval, audioLevel: Float, locked: Bool)
     case processing
     case result(FormattedOutput)
     case error(String)

@@ -57,6 +57,9 @@ final class PipelineOrchestrator: ObservableObject {
     private var durationTimer: Timer?
     private var recordingStartTime: Date?
 
+    /// Reference to the hotkey manager, needed to set `recordingLocked`.
+    private weak var hotkeyManager: HotkeyManager?
+
     // MARK: - Init
 
     init(
@@ -115,7 +118,7 @@ final class PipelineOrchestrator: ObservableObject {
         log.info("Fn down — context=\(detectedContext.rawValue), starting recording")
 
         recordingStartTime = Date()
-        state = .recording(duration: 0, audioLevel: 0)
+        state = .recording(duration: 0, audioLevel: 0, locked: false)
         startDurationTimer()
 
         Task {
@@ -140,6 +143,7 @@ final class PipelineOrchestrator: ObservableObject {
     /// Called on Fn key-up. Stops recording and kicks off the
     /// transcribe → format → copy pipeline.
     func handleRecordStop() {
+        hotkeyManager?.recordingLocked = false
         stopDurationTimer()
 
         // Capture context before entering the async task — it won't change.
@@ -215,6 +219,7 @@ final class PipelineOrchestrator: ObservableObject {
     /// Called on Escape while Fn is held. Discards the recording entirely.
     func handleDiscard() {
         log.info("Discard — cancelling recording")
+        hotkeyManager?.recordingLocked = false
         cancelProcessing()
         stopDurationTimer()
 
@@ -222,6 +227,16 @@ final class PipelineOrchestrator: ObservableObject {
         Task { _ = await recorder.stopRecording() }
 
         state = .idle
+    }
+
+    /// Called when L is pressed during recording. Locks hands-free mode so
+    /// the user can release the hotkey and keep recording.
+    func handleRecordLock() {
+        guard case .recording(let duration, let audioLevel, let locked) = state,
+              !locked else { return }
+        log.info("Recording locked — hands-free mode")
+        state = .recording(duration: duration, audioLevel: audioLevel, locked: true)
+        hotkeyManager?.recordingLocked = true
     }
 
     /// Restore the previous clipboard content (called from the result preview).
@@ -277,8 +292,10 @@ final class PipelineOrchestrator: ObservableObject {
     /// Connect HotkeyManager callbacks to this orchestrator.
     func wire(hotkey: HotkeyManager) {
         log.info("Wiring hotkey callbacks to orchestrator")
+        self.hotkeyManager = hotkey
         hotkey.onRecordStart = { [weak self] in self?.handleRecordStart() }
         hotkey.onRecordStop = { [weak self] in self?.handleRecordStop() }
+        hotkey.onRecordLock = { [weak self] in self?.handleRecordLock() }
         hotkey.onDiscard = { [weak self] in self?.handleDiscard() }
     }
 
@@ -336,9 +353,16 @@ final class PipelineOrchestrator: ObservableObject {
             MainActor.assumeIsolated {
                 guard let self,
                       let start = self.recordingStartTime else { return }
+                let locked: Bool
+                if case .recording(_, _, let isLocked) = self.state {
+                    locked = isLocked
+                } else {
+                    locked = false
+                }
                 self.state = .recording(
                     duration: Date().timeIntervalSince(start),
-                    audioLevel: self.recorder.audioLevel
+                    audioLevel: self.recorder.audioLevel,
+                    locked: locked
                 )
             }
         }

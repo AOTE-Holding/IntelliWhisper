@@ -13,7 +13,6 @@ final class FloatingPanelController {
     private var cancellables = Set<AnyCancellable>()
     private var autoHideTask: Task<Void, Never>?
     private var escapeMonitor: Any?
-    private var resizeObserver: NSObjectProtocol?
     private var isHiding = false
 
     /// Preview duration in seconds before auto-hiding the result.
@@ -149,7 +148,7 @@ final class FloatingPanelController {
         hostingController.view.wantsLayer = true
         hostingController.view.layer?.backgroundColor = NSColor.clear.cgColor
 
-        let panel = NSPanel(
+        let panel = TopAnchoredPanel(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 60),
             styleMask: [.nonactivatingPanel],
             backing: .buffered,
@@ -167,18 +166,6 @@ final class FloatingPanelController {
         // Center below menu bar
         centerPanel(panel)
 
-        // Re-center when panel resizes (e.g. state transition animations)
-        resizeObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didResizeNotification,
-            object: panel,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, !self.isHiding, let panel = self.panel else { return }
-                self.centerPanel(panel)
-            }
-        }
-
         self.panel = panel
     }
 
@@ -189,5 +176,28 @@ final class FloatingPanelController {
         let x = visibleFrame.origin.x + (visibleFrame.width - panelFrame.width) / 2
         let y = visibleFrame.maxY - 4
         panel.setFrameTopLeftPoint(NSPoint(x: x, y: y))
+    }
+}
+
+// MARK: - Top-anchored panel
+
+/// NSPanel subclass that keeps its top edge fixed when the content resizes.
+/// Prevents the visible "jump" caused by macOS default bottom-left anchoring
+/// followed by a deferred top-left correction.
+private class TopAnchoredPanel: NSPanel {
+    override func setFrame(_ frameRect: NSRect, display flag: Bool) {
+        guard isVisible else {
+            super.setFrame(frameRect, display: flag)
+            return
+        }
+        var rect = frameRect
+        // Keep top edge pinned: adjust origin so maxY stays the same
+        rect.origin.y = frame.maxY - rect.height
+        // Stay centered horizontally
+        if let screen = screen ?? NSScreen.main {
+            let visible = screen.visibleFrame
+            rect.origin.x = visible.origin.x + (visible.width - rect.width) / 2
+        }
+        super.setFrame(rect, display: flag)
     }
 }

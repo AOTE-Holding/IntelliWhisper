@@ -5,16 +5,22 @@ import SwiftUI
 struct FloatingPanelView: View {
     @ObservedObject var orchestrator: PipelineOrchestrator
 
+    private var isRecordingLocked: Bool {
+        if case .recording(_, _, let locked) = orchestrator.state { return locked }
+        return false
+    }
+
     var body: some View {
         Group {
             switch orchestrator.state {
             case .idle:
                 EmptyView()
 
-            case .recording(let duration, let audioLevel):
+            case .recording(let duration, let audioLevel, let locked):
                 RecordingView(
                     duration: duration,
                     audioLevel: audioLevel,
+                    locked: locked,
                     context: orchestrator.detectedContext,
                     formattingEnabled: orchestrator.detectedContext == .email
                         ? orchestrator.settings.formatEmail
@@ -38,6 +44,7 @@ struct FloatingPanelView: View {
                 VisualEffectBlur()
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(Color.black.opacity(0.3))
+                // Normal gradient border
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .stroke(
                         LinearGradient(
@@ -47,6 +54,13 @@ struct FloatingPanelView: View {
                         ),
                         lineWidth: 0.5
                     )
+                    .opacity(isRecordingLocked ? 0 : 1)
+                    .animation(.easeInOut(duration: 0.25), value: isRecordingLocked)
+                // Red border when recording is locked
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(Color.red.opacity(0.8), lineWidth: 1.5)
+                    .opacity(isRecordingLocked ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.25), value: isRecordingLocked)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -59,34 +73,57 @@ struct FloatingPanelView: View {
 private struct RecordingView: View {
     let duration: TimeInterval
     let audioLevel: Float
+    let locked: Bool
     let context: FormatContext
     let formattingEnabled: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
-            // Pulsing red dot
-            Circle()
-                .fill(.red)
-                .frame(width: 10, height: 10)
-                .opacity(pulseOpacity)
-                .animation(
-                    .easeInOut(duration: 0.6).repeatForever(autoreverses: true),
-                    value: true
-                )
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                if locked {
+                    // Lock icon when recording is locked
+                    Image(systemName: "lock.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .frame(width: 10)
+                        .transition(.opacity)
+                } else {
+                    // Pulsing red dot
+                    Circle()
+                        .fill(.red)
+                        .frame(width: 10, height: 10)
+                        .opacity(pulseOpacity)
+                        .animation(
+                            .easeInOut(duration: 0.6).repeatForever(autoreverses: true),
+                            value: true
+                        )
+                        .transition(.opacity)
+                }
 
-            Text(formattedDuration)
-                .font(.system(.body, design: .monospaced))
-                .foregroundStyle(.primary)
+                Text(formattedDuration)
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(.primary)
 
-            WaveformView(audioLevel: audioLevel)
-                .frame(maxWidth: .infinity)
-                .frame(height: 20)
+                WaveformView(audioLevel: audioLevel)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 20)
 
-            ContextIcon(context: context)
-            if formattingEnabled {
-                FormattingIcon()
+                ContextIcon(context: context)
+                if formattingEnabled {
+                    FormattingIcon()
+                }
             }
+
+            // Hint — stays in layout but height + opacity animate to zero
+            Text("Press L to lock")
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary.opacity(0.6))
+                .opacity(locked ? 0 : 1)
+                .frame(height: locked ? 0 : 14)
+                .padding(.top, locked ? 0 : 4)
+                .clipped()
         }
+        .animation(.easeInOut(duration: 0.3), value: locked)
         .frame(width: 230)
     }
 

@@ -19,6 +19,7 @@ final class SettingsService: ObservableObject {
         static let formatEmail = "formatEmail"
         static let generalSystemPrompt = "generalSystemPrompt"
         static let emailSystemPrompt = "emailSystemPrompt"
+        static let handsFreeRecording = "handsFreeRecording"
         static let setupCompleted = "setupCompleted"
     }
 
@@ -93,6 +94,10 @@ final class SettingsService: ObservableObject {
         didSet { save(Keys.emailSystemPrompt, emailSystemPrompt) }
     }
 
+    @Published var handsFreeRecording: Bool {
+        didSet { save(Keys.handsFreeRecording, handsFreeRecording) }
+    }
+
     @Published var setupCompleted: Bool {
         didSet { save(Keys.setupCompleted, setupCompleted) }
     }
@@ -110,6 +115,7 @@ final class SettingsService: ObservableObject {
         self.formatEmail = d.object(forKey: Keys.formatEmail) as? Bool ?? true
         self.generalSystemPrompt = d.string(forKey: Keys.generalSystemPrompt) ?? Self.defaultGeneralSystemPrompt
         self.emailSystemPrompt = d.string(forKey: Keys.emailSystemPrompt) ?? Self.defaultEmailSystemPrompt
+        self.handsFreeRecording = d.object(forKey: Keys.handsFreeRecording) as? Bool ?? false
         self.setupCompleted = d.bool(forKey: Keys.setupCompleted)
     }
 

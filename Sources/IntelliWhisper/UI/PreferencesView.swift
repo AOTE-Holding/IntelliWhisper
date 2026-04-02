@@ -67,6 +67,14 @@ struct PreferencesView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+
+                Toggle("Hands-free recording", isOn: $settings.handsFreeRecording)
+
+                if settings.handsFreeRecording {
+                    Text("Press hotkey to start, press again to stop. No need to hold.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Output") {

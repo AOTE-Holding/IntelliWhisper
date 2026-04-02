@@ -5,8 +5,11 @@ import SwiftUI
 struct FloatingPanelView: View {
     @ObservedObject var orchestrator: PipelineOrchestrator
 
-    private var isRecordingLocked: Bool {
-        if case .recording(_, _, let locked) = orchestrator.state { return locked }
+    /// True only when the user manually locked recording (not hands-free mode).
+    private var isManuallyLocked: Bool {
+        if case .recording(_, _, let locked) = orchestrator.state {
+            return locked && !orchestrator.settings.handsFreeRecording
+        }
         return false
     }
 
@@ -21,6 +24,7 @@ struct FloatingPanelView: View {
                     duration: duration,
                     audioLevel: audioLevel,
                     locked: locked,
+                    handsFree: orchestrator.settings.handsFreeRecording,
                     context: orchestrator.detectedContext,
                     formattingEnabled: orchestrator.detectedContext == .email
                         ? orchestrator.settings.formatEmail
@@ -54,13 +58,13 @@ struct FloatingPanelView: View {
                         ),
                         lineWidth: 0.5
                     )
-                    .opacity(isRecordingLocked ? 0 : 1)
-                    .animation(.easeInOut(duration: 0.25), value: isRecordingLocked)
-                // Red border when recording is locked
+                    .opacity(isManuallyLocked ? 0 : 1)
+                    .animation(.easeInOut(duration: 0.25), value: isManuallyLocked)
+                // Red border when recording is manually locked
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .stroke(Color.red.opacity(0.8), lineWidth: 1.5)
-                    .opacity(isRecordingLocked ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.25), value: isRecordingLocked)
+                    .opacity(isManuallyLocked ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.25), value: isManuallyLocked)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -74,14 +78,18 @@ private struct RecordingView: View {
     let duration: TimeInterval
     let audioLevel: Float
     let locked: Bool
+    let handsFree: Bool
     let context: FormatContext
     let formattingEnabled: Bool
+
+    /// Show lock visuals only when manually locked (not hands-free mode).
+    private var showLockVisuals: Bool { locked && !handsFree }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                if locked {
-                    // Lock icon when recording is locked
+                if showLockVisuals {
+                    // Lock icon when recording is manually locked
                     Image(systemName: "lock.fill")
                         .font(.caption)
                         .foregroundStyle(.red)
@@ -114,14 +122,16 @@ private struct RecordingView: View {
                 }
             }
 
-            // Hint — stays in layout but height + opacity animate to zero
-            Text("Press L to lock")
-                .font(.system(size: 9))
-                .foregroundStyle(.secondary.opacity(0.6))
-                .opacity(locked ? 0 : 1)
-                .frame(height: locked ? 0 : 14)
-                .padding(.top, locked ? 0 : 4)
-                .clipped()
+            // Hint — hidden in hands-free mode, collapses when manually locked
+            if !handsFree {
+                Text("Press L to lock")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary.opacity(0.6))
+                    .opacity(locked ? 0 : 1)
+                    .frame(height: locked ? 0 : 14)
+                    .padding(.top, locked ? 0 : 4)
+                    .clipped()
+            }
         }
         .animation(.easeInOut(duration: 0.3), value: locked)
         .frame(width: 230)

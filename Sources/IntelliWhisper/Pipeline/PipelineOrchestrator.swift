@@ -117,8 +117,10 @@ final class PipelineOrchestrator: ObservableObject {
         detectedContext = contextDetector.detectContext()
         log.info("Fn down — context=\(detectedContext.rawValue), starting recording")
 
+        let handsFree = settings.handsFreeRecording
         recordingStartTime = Date()
-        state = .recording(duration: 0, audioLevel: 0, locked: false)
+        state = .recording(duration: 0, audioLevel: 0, locked: handsFree)
+        if handsFree { hotkeyManager?.recordingLocked = true }
         startDurationTimer()
 
         Task {

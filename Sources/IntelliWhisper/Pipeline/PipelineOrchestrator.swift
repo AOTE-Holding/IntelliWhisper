@@ -102,6 +102,12 @@ final class PipelineOrchestrator: ObservableObject {
             return
         }
 
+        // Don't cancel in-flight transcription from accidental hotkey re-press.
+        if case .processing = state {
+            log.info("Fn pressed during processing — ignoring")
+            return
+        }
+
         // Cancel any in-flight processing from a previous recording.
         cancelProcessing()
 

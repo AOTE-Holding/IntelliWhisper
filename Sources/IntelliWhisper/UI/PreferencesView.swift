@@ -56,13 +56,22 @@ struct PreferencesView: View {
             }
 
             Section("Hotkey") {
-                Picker("Push-to-talk key", selection: $settings.hotkeyChoice) {
-                    ForEach(HotkeyChoice.allCases) { choice in
-                        Text(choice.displayName).tag(choice.rawValue)
-                    }
+                HStack {
+                    Text("Push-to-talk key")
+                    Spacer()
+                    HotkeyRecorderView(
+                        hotkeyJSON: $settings.hotkeyChoice,
+                        onRecordingChanged: { recording in
+                            if recording {
+                                orchestrator.pauseHotkey()
+                            } else {
+                                orchestrator.resumeHotkey()
+                            }
+                        }
+                    )
                 }
 
-                if settings.hotkeyChoice == HotkeyChoice.fn.rawValue {
+                if let hotkey = CustomHotkey.fromJSON(settings.hotkeyChoice), hotkey.isFnKey {
                     Text("Set \"Press fn key to\" → \"Do Nothing\" in System Settings → Keyboard.")
                         .font(.caption)
                         .foregroundStyle(.secondary)

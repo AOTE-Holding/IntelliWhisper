@@ -16,7 +16,7 @@ final class FirstRunCoordinator: ObservableObject {
         case microphone
         case screenRecording
         case inputMonitoring
-        case fnKeyCheck
+        case hotkeySelection
         case ollama
         case modelDownload
     }
@@ -46,7 +46,7 @@ final class FirstRunCoordinator: ObservableObject {
 
     // MARK: - Subsystems
 
-    private let settings: SettingsService
+    let settings: SettingsService
     private let transcriber: any Transcribing
     private let formatter: any Formatting
     private let hotkey: HotkeyManager
@@ -115,9 +115,8 @@ final class FirstRunCoordinator: ObservableObject {
         }
     }
 
-    func acknowledgeFnKey() {
-        // Informational step — no detection possible.
-        stepStatuses[.fnKeyCheck] = .granted
+    func confirmHotkey() {
+        stepStatuses[.hotkeySelection] = .granted
     }
 
     func checkOllama() async {

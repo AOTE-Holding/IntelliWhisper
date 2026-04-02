@@ -78,8 +78,8 @@ struct FirstRunView: View {
             ScreenRecordingStepView(coordinator: coordinator)
         case .inputMonitoring:
             InputMonitoringStepView(coordinator: coordinator)
-        case .fnKeyCheck:
-            FnKeyStepView(coordinator: coordinator)
+        case .hotkeySelection:
+            HotkeySelectionStepView(coordinator: coordinator)
         case .ollama:
             OllamaStepView(coordinator: coordinator)
         case .modelDownload:
@@ -189,7 +189,7 @@ private struct InputMonitoringStepView: View {
         StepLayout(
             icon: "keyboard",
             title: "Input Monitoring",
-            description: "IntelliWhisper uses the Fn (Globe) key as a push-to-talk trigger. Input Monitoring permission is required to detect this key globally."
+            description: "IntelliWhisper uses a push-to-talk key to start and stop recording. Input Monitoring permission is required to detect key presses globally."
         ) {
             StepActionButton(
                 status: coordinator.stepStatuses[.inputMonitoring] ?? .pending,
@@ -214,31 +214,47 @@ private struct InputMonitoringStepView: View {
     }
 }
 
-private struct FnKeyStepView: View {
+private struct HotkeySelectionStepView: View {
     @ObservedObject var coordinator: FirstRunCoordinator
 
     var body: some View {
         StepLayout(
-            icon: "globe",
-            title: "Fn Key Configuration",
-            description: "IntelliWhisper uses the Fn (Globe) key to start and stop recording. If pressing Fn opens the emoji picker instead, you'll need to change a system setting."
+            icon: "keyboard",
+            title: "Push-to-Talk Key",
+            description: "Choose which key or key combination starts and stops recording. Press and hold to record, release to stop."
         ) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Go to:")
-                    .font(.callout.bold())
-                Text("System Settings → Keyboard → \"Press fn key to\" → \"Do Nothing\"")
-                    .font(.callout)
-                    .padding(10)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+            HotkeyRecorderView(hotkeyJSON: Binding(
+                get: { coordinator.settings.hotkeyChoice },
+                set: { newValue in
+                    coordinator.settings.hotkeyChoice = newValue
+                    coordinator.confirmHotkey()
+                }
+            ))
+
+            if case .granted = coordinator.stepStatuses[.hotkeySelection] {
+                let hotkey = CustomHotkey.fromJSON(coordinator.settings.hotkeyChoice)
+                if hotkey?.isFnKey == true {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Go to:")
+                            .font(.callout.bold())
+                        Text("System Settings → Keyboard → \"Press fn key to\" → \"Do Nothing\"")
+                            .font(.callout)
+                            .padding(10)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                    }
+                    .padding(.top, 4)
+                }
             }
 
-            Button("I've checked this") {
-                coordinator.acknowledgeFnKey()
+            if case .pending = coordinator.stepStatuses[.hotkeySelection] ?? .pending {
+                Button("Use Default (Fn)") {
+                    coordinator.confirmHotkey()
+                }
+                .buttonStyle(.bordered)
+                .padding(.top, 4)
             }
-            .buttonStyle(.bordered)
-            .padding(.top, 8)
 
-            Text("You can change the push-to-talk key later in Preferences.")
+            Text("You can change this later in Preferences.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }

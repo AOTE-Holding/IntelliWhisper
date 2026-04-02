@@ -291,6 +291,16 @@ final class PipelineOrchestrator: ObservableObject {
 
     // MARK: - Hotkey wiring
 
+    /// Pause the hotkey event tap (e.g. during hotkey recording in preferences).
+    func pauseHotkey() {
+        hotkeyManager?.paused = true
+    }
+
+    /// Resume the hotkey event tap after recording.
+    func resumeHotkey() {
+        hotkeyManager?.paused = false
+    }
+
     /// Connect HotkeyManager callbacks to this orchestrator.
     func wire(hotkey: HotkeyManager) {
         log.info("Wiring hotkey callbacks to orchestrator")

@@ -109,7 +109,15 @@ final class SettingsService: ObservableObject {
         self.preferredLanguage = d.string(forKey: Keys.preferredLanguage) ?? "de"
         self.whisperModel = d.string(forKey: Keys.whisperModel) ?? WhisperModel.default.rawValue
         self.ollamaModel = d.string(forKey: Keys.ollamaModel) ?? Self.defaultOllamaModel
-        self.hotkeyChoice = d.string(forKey: Keys.hotkeyChoice) ?? HotkeyChoice.default.rawValue
+        // Hotkey: migrate legacy enum values (fn/rightOption/sectionSign) to JSON
+        let rawHotkey = d.string(forKey: Keys.hotkeyChoice) ?? ""
+        if !rawHotkey.isEmpty, CustomHotkey.fromJSON(rawHotkey) != nil {
+            self.hotkeyChoice = rawHotkey
+        } else {
+            let migrated = (CustomHotkey.fromLegacy(rawHotkey) ?? .default).toJSON()
+            self.hotkeyChoice = migrated
+            d.set(migrated, forKey: Keys.hotkeyChoice)
+        }
         self.outputMode = d.string(forKey: Keys.outputMode) ?? OutputMode.clipboard.rawValue
         self.formatGeneral = d.object(forKey: Keys.formatGeneral) as? Bool ?? true
         self.formatEmail = d.object(forKey: Keys.formatEmail) as? Bool ?? true

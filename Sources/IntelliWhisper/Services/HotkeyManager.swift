@@ -3,7 +3,8 @@ import Foundation
 import SwiftyBeaver
 
 /// Captures global hotkey events via CGEventTap for push-to-talk recording.
-/// The active hotkey is configurable via UserDefaults ("hotkeyChoice").
+/// The active hotkey is read from UserDefaults on each event and can be any
+/// key or key combination configured by the user via `CustomHotkey`.
 /// Requires Input Monitoring permission.
 ///
 /// Publishes four callbacks:
@@ -15,28 +16,30 @@ import SwiftyBeaver
 /// The event tap runs on the main run loop, so all callbacks
 /// fire on the main thread.
 final class HotkeyManager: @unchecked Sendable {
-    /// Called when the hotkey is pressed down.
     nonisolated(unsafe) var onRecordStart: (@MainActor () -> Void)?
-    /// Called when the hotkey is released (or re-pressed to end a locked recording).
     nonisolated(unsafe) var onRecordStop: (@MainActor () -> Void)?
-    /// Called when L is pressed during recording to lock hands-free mode.
     nonisolated(unsafe) var onRecordLock: (@MainActor () -> Void)?
-    /// Called when Escape is pressed while the hotkey is held or recording is locked.
     nonisolated(unsafe) var onDiscard: (@MainActor () -> Void)?
 
     /// When true, the hotkey release is ignored and the next hotkey press
     /// fires `onRecordStop`. Set by the orchestrator after `onRecordLock`.
     nonisolated(unsafe) var recordingLocked = false
 
+    /// When true, all events pass through without handling. Set during
+    /// hotkey recording in the preferences UI.
+    nonisolated(unsafe) var paused = false
+
     private(set) nonisolated(unsafe) var eventTap: CFMachPort?
     fileprivate nonisolated(unsafe) var runLoopSource: CFRunLoopSource?
     private nonisolated(unsafe) var hotkeyDown = false
-    /// Prevents the § key-up after a locked stop from re-triggering onRecordStop.
+    /// Prevents the key-up after a locked stop from re-triggering onRecordStop.
     private nonisolated(unsafe) var suppressNextKeyUp = false
 
-    /// Currently selected hotkey, read from UserDefaults on each event.
-    private var hotkeyChoice: HotkeyChoice {
-        HotkeyChoice(rawValue: UserDefaults.standard.string(forKey: SettingsService.Keys.hotkeyChoice) ?? "") ?? .fn
+    /// Currently configured hotkey, read from UserDefaults on each event.
+    private var currentHotkey: CustomHotkey {
+        CustomHotkey.fromStored(
+            UserDefaults.standard.string(forKey: SettingsService.Keys.hotkeyChoice)
+        )
     }
 
     /// Install the global event tap. Returns false if Input Monitoring
@@ -72,13 +75,18 @@ final class HotkeyManager: @unchecked Sendable {
         CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
 
-        log.info("Event tap installed (hotkey=\(hotkeyChoice.rawValue))")
+        let hotkey = currentHotkey
+        log.info("Event tap installed (hotkey=\(hotkey.displayName))")
         return true
     }
 
     // MARK: - Event handling (called from C callback on main run loop)
 
     fileprivate func handleEvent(_ type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        if paused { return Unmanaged.passUnretained(event) }
+
+        let hotkey = currentHotkey
+
         // Escape discard + L lock — active while hotkey held or recording locked
         if type == .keyDown && (hotkeyDown || recordingLocked) {
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
@@ -88,102 +96,90 @@ final class HotkeyManager: @unchecked Sendable {
                 MainActor.assumeIsolated { onDiscard?() }
                 return nil
             }
-            if keyCode == 37 && hotkeyDown && !recordingLocked { // L — lock recording
-                MainActor.assumeIsolated { onRecordLock?() }
-                return nil
+            // L — lock recording (only if L isn't the hotkey itself)
+            if keyCode == 37 && hotkeyDown && !recordingLocked {
+                if hotkey.kind != .key || hotkey.keyCode != 37 {
+                    MainActor.assumeIsolated { onRecordLock?() }
+                    return nil
+                }
             }
         }
 
-        switch hotkeyChoice {
-        case .fn:
-            return handleFn(type: type, event: event)
-        case .rightOption:
-            return handleRightOption(type: type, event: event)
-        case .sectionSign:
-            return handleSectionSign(type: type, event: event)
+        switch hotkey.kind {
+        case .fnKey:
+            return handleFnKey(type: type, event: event)
+        case .modifier:
+            return handleModifier(type: type, event: event, mask: hotkey.modifierMask)
+        case .key:
+            return handleKey(type: type, event: event, keyCode: hotkey.keyCode, modifiers: hotkey.modifierMask)
         }
     }
 
     // MARK: - Fn (Globe) key
 
-    private func handleFn(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+    private func handleFnKey(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         guard type == .flagsChanged else { return Unmanaged.passUnretained(event) }
+        let pressed = event.flags.contains(.maskSecondaryFn)
+        return handleModifierPushToTalk(pressed: pressed, event: event)
+    }
 
-        let fnPressed = event.flags.contains(.maskSecondaryFn)
+    // MARK: - Single modifier key (e.g. Right Option)
 
+    private func handleModifier(type: CGEventType, event: CGEvent, mask: UInt64) -> Unmanaged<CGEvent>? {
+        guard type == .flagsChanged else { return Unmanaged.passUnretained(event) }
+        let pressed = (event.flags.rawValue & mask) != 0
+        return handleModifierPushToTalk(pressed: pressed, event: event)
+    }
+
+    /// Shared push-to-talk logic for modifier-based hotkeys (Fn, Right Option, etc.).
+    private func handleModifierPushToTalk(pressed: Bool, event: CGEvent) -> Unmanaged<CGEvent>? {
         if recordingLocked {
-            // Locked: ignore releases. On next press, stop recording.
-            if fnPressed {
+            if pressed {
                 hotkeyDown = false
                 recordingLocked = false
                 MainActor.assumeIsolated { onRecordStop?() }
             }
-        } else if fnPressed && !hotkeyDown {
+        } else if pressed && !hotkeyDown {
             hotkeyDown = true
             MainActor.assumeIsolated { onRecordStart?() }
-        } else if !fnPressed && hotkeyDown {
+        } else if !pressed && hotkeyDown {
             hotkeyDown = false
             MainActor.assumeIsolated { onRecordStop?() }
         }
-
         return Unmanaged.passUnretained(event)
     }
 
-    // MARK: - Right Option (⌥)
+    // MARK: - Regular key (optionally with modifiers)
 
-    /// NX_DEVICERALTKEYMASK — bit set only when the *right* Option key is pressed.
-    private static let rightOptionBit: UInt64 = 0x00000040
+    private func handleKey(type: CGEventType, event: CGEvent, keyCode: Int64, modifiers: UInt64) -> Unmanaged<CGEvent>? {
+        let eventKeyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        guard eventKeyCode == keyCode else { return Unmanaged.passUnretained(event) }
 
-    private func handleRightOption(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        guard type == .flagsChanged else { return Unmanaged.passUnretained(event) }
-
-        let rightOptionPressed = (event.flags.rawValue & Self.rightOptionBit) != 0
-
-        if recordingLocked {
-            // Locked: ignore releases. On next press, stop recording.
-            if rightOptionPressed {
-                hotkeyDown = false
-                recordingLocked = false
-                MainActor.assumeIsolated { onRecordStop?() }
-            }
-        } else if rightOptionPressed && !hotkeyDown {
-            hotkeyDown = true
-            MainActor.assumeIsolated { onRecordStart?() }
-        } else if !rightOptionPressed && hotkeyDown {
-            hotkeyDown = false
-            MainActor.assumeIsolated { onRecordStop?() }
+        // For key combos, verify required modifiers are held
+        if modifiers != 0 && type == .keyDown {
+            let currentMods = event.flags.rawValue & CustomHotkey.relevantModifierMask
+            guard currentMods == modifiers else { return Unmanaged.passUnretained(event) }
         }
 
-        return Unmanaged.passUnretained(event)
-    }
-
-    // MARK: - § key (keyCode 10, ISO keyboards)
-
-    private func handleSectionSign(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        guard keyCode == 10 else { return Unmanaged.passUnretained(event) }
-
         if recordingLocked {
-            // Locked: on next keyDown, stop recording.
             if type == .keyDown {
                 hotkeyDown = false
                 recordingLocked = false
                 suppressNextKeyUp = true
                 MainActor.assumeIsolated { onRecordStop?() }
             }
-            return nil // swallow all § events while locked
+            return nil // swallow all events for this key while locked
         }
 
         if type == .keyDown && !hotkeyDown {
             hotkeyDown = true
             MainActor.assumeIsolated { onRecordStart?() }
-            return nil // swallow — don't type §
+            return nil
         } else if type == .keyUp && hotkeyDown {
             hotkeyDown = false
             MainActor.assumeIsolated { onRecordStop?() }
-            return nil // swallow release too
+            return nil
         } else if type == .keyUp && suppressNextKeyUp {
-            // Swallow the release after a locked stop to prevent re-triggering.
             suppressNextKeyUp = false
             return nil
         } else if type == .keyDown && hotkeyDown {

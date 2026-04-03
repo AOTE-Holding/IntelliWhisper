@@ -20,8 +20,9 @@ Options:
   --pkg       Create .pkg installer (installs to /Applications)
   --zip       Create .zip with just the .app bundle
   --direct    Create .zip with launcher workaround (runs binary directly)
-  --all       Create all three artifacts (--pkg --zip --direct)
-  --help      Show this help message
+  --all               Create all three artifacts (--pkg --zip --direct)
+  --reset-permissions Kill app, remove installation, reset TCC permissions and setup wizard (standalone)
+  --help              Show this help message
 
 Artifact flags imply --release. Debug builds only produce the .app bundle.
 EOF
@@ -93,18 +94,47 @@ CONFIG="debug"
 BUILD_PKG=false
 BUILD_ZIP=false
 BUILD_DIRECT=false
+RESET_PERMISSIONS=false
 
 for arg in "$@"; do
     case "$arg" in
-        --release) CONFIG="release" ;;
-        --pkg)     CONFIG="release"; BUILD_PKG=true ;;
-        --zip)     CONFIG="release"; BUILD_ZIP=true ;;
-        --direct)  CONFIG="release"; BUILD_DIRECT=true ;;
-        --all)     CONFIG="release"; BUILD_PKG=true; BUILD_ZIP=true; BUILD_DIRECT=true ;;
-        --help|-h) usage; exit 0 ;;
-        *)         echo "Unknown option: $arg"; echo ""; usage; exit 1 ;;
+        --release)           CONFIG="release" ;;
+        --pkg)               CONFIG="release"; BUILD_PKG=true ;;
+        --zip)               CONFIG="release"; BUILD_ZIP=true ;;
+        --direct)            CONFIG="release"; BUILD_DIRECT=true ;;
+        --all)               CONFIG="release"; BUILD_PKG=true; BUILD_ZIP=true; BUILD_DIRECT=true ;;
+        --reset-permissions) RESET_PERMISSIONS=true ;;
+        --help|-h)           usage; exit 0 ;;
+        *)                   echo "Unknown option: $arg"; echo ""; usage; exit 1 ;;
     esac
 done
+
+# ---------------------------------------------------------------------------
+# Reset permissions (standalone — exits before build)
+# ---------------------------------------------------------------------------
+if $RESET_PERMISSIONS; then
+    BUNDLE_ID="de.intellilab.IntelliWhisper"
+    INSTALL_PATH="/Applications/IntelliWhisper"
+    echo "WARNING: This will kill IntelliWhisper, remove $INSTALL_PATH, reset all TCC"
+    echo "permissions, and clear the setup wizard for $BUNDLE_ID."
+    echo ""
+    read -r -p "Continue? [y/N] " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Aborted."
+        exit 0
+    fi
+    echo "Killing IntelliWhisper processes..."
+    pkill -x "IntelliWhisper" 2>/dev/null || echo "  (not running — skipping)"
+    echo "Removing $INSTALL_PATH..."
+    rm -rf "$INSTALL_PATH" 2>/dev/null || echo "  (not installed — skipping)"
+    echo "Resetting TCC permissions..."
+    tccutil reset All "$BUNDLE_ID" 2>/dev/null || echo "  (no TCC entries found — skipping)"
+    echo "Resetting setupCompleted default..."
+    defaults delete "$BUNDLE_ID" setupCompleted 2>/dev/null || echo "  (setupCompleted was not set — skipping)"
+    echo ""
+    echo "Done. Install the .pkg and grant permissions fresh on next launch."
+    exit 0
+fi
 
 # ---------------------------------------------------------------------------
 # Build

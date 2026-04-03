@@ -217,23 +217,27 @@ private struct InputMonitoringStepView: View {
 private struct HotkeySelectionStepView: View {
     @ObservedObject var coordinator: FirstRunCoordinator
 
+    private var isConfirmed: Bool {
+        guard case .granted = coordinator.stepStatuses[.hotkeySelection] else { return false }
+        return true
+    }
+
+    private var currentHotkey: CustomHotkey {
+        CustomHotkey.fromStored(coordinator.settings.hotkeyChoice)
+    }
+
     var body: some View {
         StepLayout(
             icon: "keyboard",
             title: "Push-to-Talk Key",
             description: "Choose which key or key combination starts and stops recording. Press and hold to record, release to stop."
         ) {
-            HotkeyRecorderView(hotkeyJSON: Binding(
-                get: { coordinator.settings.hotkeyChoice },
-                set: { newValue in
-                    coordinator.settings.hotkeyChoice = newValue
-                    coordinator.confirmHotkey()
-                }
-            ))
+            if isConfirmed {
+                Label("Set to: \(currentHotkey.displayName)", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.callout)
 
-            if case .granted = coordinator.stepStatuses[.hotkeySelection] {
-                let hotkey = CustomHotkey.fromJSON(coordinator.settings.hotkeyChoice)
-                if hotkey?.isFnKey == true {
+                if currentHotkey.isFnKey {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Go to:")
                             .font(.callout.bold())
@@ -244,20 +248,52 @@ private struct HotkeySelectionStepView: View {
                     }
                     .padding(.top, 4)
                 }
-            }
 
-            if case .pending = coordinator.stepStatuses[.hotkeySelection] ?? .pending {
-                Button("Use Default (Fn)") {
-                    coordinator.confirmHotkey()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Record a different key:")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    hotkeyRecorder
                 }
-                .buttonStyle(.bordered)
                 .padding(.top, 4)
+            } else {
+                if coordinator.settings.hotkeyWasPreviouslyConfigured {
+                    Button("Keep current: \(currentHotkey.displayName)") {
+                        coordinator.confirmHotkey()
+                    }
+                    .buttonStyle(.borderedProminent)
+                } else {
+                    Button("Use default (Fn)") {
+                        coordinator.confirmHotkey()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+
+                Text(coordinator.settings.hotkeyWasPreviouslyConfigured
+                    ? "Or record a different key:"
+                    : "Or record a custom key:")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+
+                hotkeyRecorder
             }
 
             Text("You can change this later in Preferences.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
+                .padding(.top, 4)
         }
+    }
+
+    private var hotkeyRecorder: some View {
+        HotkeyRecorderView(hotkeyJSON: Binding(
+            get: { coordinator.settings.hotkeyChoice },
+            set: { newValue in
+                coordinator.settings.hotkeyChoice = newValue
+                coordinator.confirmHotkey()
+            }
+        ))
     }
 }
 

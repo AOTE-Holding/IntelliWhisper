@@ -112,6 +112,11 @@ final class SettingsService: ObservableObject {
         didSet { save(Keys.vocabularyKeywords, encodeJSON(vocabularyKeywords)) }
     }
 
+    /// True if UserDefaults contained any hotkey value before this init ran,
+    /// meaning the user has launched the app before. Used by the setup wizard
+    /// to decide whether to offer "keep current key" vs "use default (Fn)".
+    private(set) var hotkeyWasPreviouslyConfigured: Bool = false
+
     // MARK: - Init
 
     init() {
@@ -121,6 +126,7 @@ final class SettingsService: ObservableObject {
         self.ollamaModel = d.string(forKey: Keys.ollamaModel) ?? Self.defaultOllamaModel
         // Hotkey: migrate legacy enum values (fn/rightOption/sectionSign) to JSON
         let rawHotkey = d.string(forKey: Keys.hotkeyChoice) ?? ""
+        self.hotkeyWasPreviouslyConfigured = !rawHotkey.isEmpty
         if !rawHotkey.isEmpty, CustomHotkey.fromJSON(rawHotkey) != nil {
             self.hotkeyChoice = rawHotkey
         } else {

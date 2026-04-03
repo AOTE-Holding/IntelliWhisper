@@ -17,29 +17,43 @@ A macOS menu bar app for fully local, privacy-first speech-to-text. Hold a hotke
 
 This compiles the app and produces a `.pkg` installer at `.build/IntelliWhisper.pkg`.
 
+> **Reinstalling or re-running the setup wizard?** Reset everything first, then rebuild:
+> ```bash
+> ./scripts/build.sh --reset-permissions
+> ./scripts/build.sh --pkg
+> ```
+> This removes the old installation, clears all saved permissions, and resets the setup wizard so it runs fresh on next launch.
+
 ### Installing
 
 1. Double-click `IntelliWhisper.pkg` (right-click → **Open** if macOS blocks it).
 2. Click through the installer (**Continue** → **Install**).
-3. The app launches automatically after installation.
-4. Grant permissions when prompted (see below), then relaunch once for **Input Monitoring** to take effect.
+3. The app launches automatically and the **setup wizard** appears — follow its steps.
+4. After the wizard completes, grant every permission that appears, then follow the **Permissions** steps below.
 
-To relaunch later, click the **IntelliWhisper** icon in the Dock (added automatically during installation) or open `/Applications/IntelliWhisper/IntelliWhisper.app`.
+To open the app manually at any time, click the **IntelliWhisper** icon in the Dock or open `/Applications/IntelliWhisper/IntelliWhisper.app`.
 
 ## Permissions
 
-IntelliWhisper requires several macOS permissions. The app will appear as **IntelliWhisper Core** in System Settings (this is the actual running process; `IntelliWhisper.app` in the Applications folder is a launcher).
+IntelliWhisper needs a few macOS permissions to work. Grant them during the setup wizard or add them manually in **System Settings → Privacy & Security**.
 
-If a permission prompt doesn't appear or you accidentally denied it, enable each one manually in **System Settings → Privacy & Security**:
+> The app appears as **IntelliWhisper Core** in System Settings — that is the correct entry to enable.
 
-- **Microphone** — required for recording audio.
-  Go to **Microphone** → toggle **IntelliWhisper Core** on.
-- **Input Monitoring** — required for the push-to-talk hotkey to work globally.
-  Go to **Input Monitoring** → add or toggle **IntelliWhisper Core** on. Relaunch the app afterward.
-- **Accessibility** — required for auto-paste (simulates Cmd+V after transcription).
-  Go to **Accessibility** → add or toggle **IntelliWhisper Core** on.
-- **Screen Recording** — required for context detection (reads window titles to adapt formatting).
-  Go to **Screen Recording** → add or toggle **IntelliWhisper Core** on.
+**For the best results, follow this exact sequence after installation:**
+
+1. Grant **Microphone**, **Input Monitoring**, and **Screen Recording** when prompted by the wizard or in System Settings.
+2. **Quit IntelliWhisper** (click the menu bar icon → **Quit**).
+3. **Start IntelliWhisper** again (Dock icon or `/Applications/IntelliWhisper/IntelliWhisper.app`).
+4. In **System Settings → Privacy & Security → Accessibility**, enable **IntelliWhisper Core**.
+5. **Quit IntelliWhisper** again.
+6. **Start IntelliWhisper** one more time — it is now fully set up.
+
+**What each permission does:**
+
+- **Microphone** — records your voice.
+- **Input Monitoring** — detects the push-to-talk hotkey globally (works in any app).
+- **Accessibility** — pastes the result directly into the active text field (optional but recommended).
+- **Screen Recording** — reads the active window title to adapt formatting for emails vs. general text (optional).
 
 ## Usage
 

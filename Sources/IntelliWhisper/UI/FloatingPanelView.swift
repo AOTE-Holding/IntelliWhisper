@@ -13,6 +13,14 @@ struct FloatingPanelView: View {
         return false
     }
 
+    private var isProcessing: Bool {
+        if case .processing = orchestrator.state { return true }
+        return false
+    }
+
+    /// Matches the brightest waveform stroke colour so the processing glow feels continuous.
+    private static let waveformTeal = Color(red: 0, green: 0xBE / 255.0, blue: 0x9A / 255.0)
+
     var body: some View {
         Group {
             switch orchestrator.state {
@@ -41,15 +49,22 @@ struct FloatingPanelView: View {
                 ErrorView(message: message)
             }
         }
+        // Force a new view identity on every state-type change so SwiftUI
+        // plays the transition instead of morphing in-place.
+        .id(orchestrator.state.discriminator)
+        .transition(.asymmetric(
+            insertion: .opacity.animation(.easeIn(duration: 0.2).delay(0.1)),
+            removal:   .opacity.animation(.easeOut(duration: 0.1))
+        ))
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background {
             ZStack {
                 VisualEffectBlur()
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: 22)
                     .fill(Color.black.opacity(0.3))
-                // Normal gradient border
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                // Normal gradient border — hidden when locked or processing
+                RoundedRectangle(cornerRadius: 22)
                     .stroke(
                         LinearGradient(
                             colors: [.white.opacity(0.25), .white.opacity(0.08)],
@@ -58,17 +73,24 @@ struct FloatingPanelView: View {
                         ),
                         lineWidth: 0.5
                     )
-                    .opacity(isManuallyLocked ? 0 : 1)
+                    .opacity(isManuallyLocked || isProcessing ? 0 : 1)
                     .animation(.easeInOut(duration: 0.25), value: isManuallyLocked)
+                    .animation(.easeInOut(duration: 0.4), value: isProcessing)
                 // Red border when recording is manually locked
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: 22)
                     .stroke(Color.red.opacity(0.8), lineWidth: 1.5)
                     .opacity(isManuallyLocked ? 1 : 0)
                     .animation(.easeInOut(duration: 0.25), value: isManuallyLocked)
+                // Teal glow border during processing
+                RoundedRectangle(cornerRadius: 22)
+                    .stroke(Self.waveformTeal.opacity(0.8), lineWidth: 1.5)
+                    .opacity(isProcessing ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.4), value: isProcessing)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: orchestrator.state.discriminator)
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .shadow(color: isProcessing ? Self.waveformTeal.opacity(0.45) : .clear, radius: 10, x: 0, y: 0)
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: orchestrator.state.discriminator)
     }
 }
 
@@ -254,7 +276,7 @@ private struct ProcessingView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
-        .frame(width: 160)
+        .frame(width: 230)
     }
 }
 
@@ -293,30 +315,37 @@ private struct ResultView: View {
 /// which renders the blur via WindowServer. maskImage communicates the shape to
 /// WindowServer directly, so the blur itself is clipped to the rounded rect.
 private struct VisualEffectBlur: NSViewRepresentable {
-    private static let cornerRadius: CGFloat = 22
+    static let cornerRadius: CGFloat = 22
 
     func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
+        let view = AdaptiveView()
         view.material = .hudWindow
         view.blendingMode = .behindWindow
         view.state = .active
-        view.maskImage = Self.maskImage
         return view
     }
 
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 
-    private static let maskImage: NSImage = {
-        let r = cornerRadius
-        let side = r * 2 + 1
-        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
-            NSBezierPath(roundedRect: rect, xRadius: r, yRadius: r).fill()
-            return true
+    /// Regenerates maskImage on every layout pass with a corner radius clamped to
+    /// min(22, min(width, height) / 2) — matching SwiftUI's RoundedRectangle(cornerRadius: 22)
+    /// clamping exactly. The old cap-inset stretch approach produced an elliptical mask
+    /// (xRadius 22, yRadius ~18.5) when pill height < 2 × cornerRadius, making the blur
+    /// appear more rounded on the sides than the SwiftUI clip shape and exposing the
+    /// gradient stroke over transparent areas as a white border.
+    private class AdaptiveView: NSVisualEffectView {
+        override func layout() {
+            super.layout()
+            let size = bounds.size
+            guard size.width > 0, size.height > 0 else { return }
+            let r = min(VisualEffectBlur.cornerRadius, min(size.width, size.height) / 2)
+            guard maskImage?.size != size else { return }
+            maskImage = NSImage(size: size, flipped: false) { rect in
+                NSBezierPath(roundedRect: rect, xRadius: r, yRadius: r).fill()
+                return true
+            }
         }
-        image.capInsets = NSEdgeInsets(top: r, left: r, bottom: r, right: r)
-        image.resizingMode = .stretch
-        return image
-    }()
+    }
 }
 
 private struct ErrorView: View {

@@ -126,10 +126,8 @@ final class FloatingPanelController {
         isHiding = true
 
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.35
-            context.timingFunction = CAMediaTimingFunction(
-                controlPoints: 0.4, 0.0, 1.0, 1.0
-            )
+            context.duration = 0.25
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             panel.animator().alphaValue = 0
         }, completionHandler: {
             MainActor.assumeIsolated { [weak self] in

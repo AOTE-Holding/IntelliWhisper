@@ -4,6 +4,8 @@
 <dict>
     <key>CFBundleName</key>
     <string>IntelliWhisper</string>
+    <key>CFBundleIconFile</key>
+    <string>IntelliWhisper</string>
     <key>CFBundleIdentifier</key>
     <string>de.intellilab.IntelliWhisper</string>
     <key>CFBundleVersion</key>

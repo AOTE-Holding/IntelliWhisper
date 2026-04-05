@@ -24,12 +24,14 @@ struct FormattedOutput: Sendable {
     let text: String
     let context: FormatContext
     let pasted: Bool
+    let keptOnClipboard: Bool
 }
 
 /// How the formatted output is delivered to the user.
 enum OutputMode: String, Sendable, CaseIterable {
     case clipboard = "clipboard"
     case paste = "paste"
+    case clipboardAndPaste = "clipboardAndPaste"
 }
 
 /// Available Whisper model variants for on-device transcription.

@@ -186,6 +186,30 @@ if $BUILD_PKG; then
     echo "  Creating launcher..."
     build_launcher "$INSTALL_DIR"
 
+    # preinstall: clean slate — kill old app, remove old install, reset TCC + wizard
+    cat > "$PKG_SCRIPTS/preinstall" <<'PREINSTALL'
+#!/bin/bash
+BUNDLE_ID="de.intellilab.IntelliWhisper"
+INSTALL_USER="${USER:-$(stat -f '%Su' /dev/console)}"
+
+# 1. Kill running IntelliWhisper processes
+pkill -x "IntelliWhisper" 2>/dev/null || true
+sleep 1
+pkill -9 -x "IntelliWhisper" 2>/dev/null || true
+
+# 2. Remove old installation completely
+rm -rf "/Applications/IntelliWhisper" 2>/dev/null || true
+
+# 3. Reset ALL TCC permissions for this bundle ID
+su "$INSTALL_USER" -c "tccutil reset All '$BUNDLE_ID'" 2>/dev/null || true
+
+# 4. Reset setup wizard so it runs fresh on next launch
+su "$INSTALL_USER" -c "defaults delete '$BUNDLE_ID' setupCompleted" 2>/dev/null || true
+
+exit 0
+PREINSTALL
+    chmod +x "$PKG_SCRIPTS/preinstall"
+
     # postinstall: auto-launch and add to Dock after installation
     cat > "$PKG_SCRIPTS/postinstall" <<'POSTINSTALL'
 #!/bin/bash
@@ -193,6 +217,10 @@ TARGET="${2%/}"
 APP_PATH="$TARGET/Applications/IntelliWhisper/IntelliWhisper.app"
 CORE_APP="$TARGET/Applications/IntelliWhisper/IntelliWhisper Core.app"
 INSTALL_USER="${USER:-$(stat -f '%Su' /dev/console)}"
+
+# Strip quarantine flags to avoid Gatekeeper delay on first launch
+xattr -cr "$CORE_APP" 2>/dev/null || true
+xattr -cr "$APP_PATH" 2>/dev/null || true
 
 # Launch the core app
 if [ -d "$CORE_APP" ]; then

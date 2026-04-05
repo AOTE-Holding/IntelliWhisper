@@ -66,7 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
 
         // 3. Create UI controllers
         menuBarController = MenuBarController(orchestrator: orchestrator)
-        floatingPanelController = FloatingPanelController(orchestrator: orchestrator)
+        floatingPanelController = FloatingPanelController(orchestrator: orchestrator, settings: settings)
 
         // 4. First-run or normal initialization
         if !settings.setupCompleted {
@@ -128,25 +128,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
+        // Re-activate after a delay to steal focus back from the pkg installer
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak window] in
+            NSApp.activate(ignoringOtherApps: true)
+            window?.makeKeyAndOrderFront(nil)
+        }
+
         firstRunWindow = window
     }
 
     @MainActor
     private func firstRunCompleted() {
-        log.info("First-run wizard completed")
+        log.info("First-run wizard completed — relaunching app for permissions to take effect")
         firstRunWindow?.close()
-        firstRunWindow = nil
-        firstRunCoordinator = nil
-        firstRunCancellable = nil
 
-        // Ensure hotkey is wired and started — the wizard may have
-        // failed or skipped Input Monitoring, so retry here.
-        orchestrator.wire(hotkey: hotkeyManager)
-        if hotkeyManager.eventTap == nil {
-            _ = hotkeyManager.start()
+        // Relaunch via 'open' after a brief delay so the current process can terminate cleanly
+        let bundlePath = Bundle.main.bundlePath
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            task.arguments = [bundlePath]
+            try? task.run()
         }
 
-        startHealthCheckTimer()
+        NSApp.terminate(nil)
     }
 
     // MARK: - Health check

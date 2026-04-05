@@ -55,8 +55,9 @@ final class AppInitializer: ObservableObject {
     ) async {
         // Step 1: Input Monitoring
         await runStep(.inputMonitoring) {
-            guard CGPreflightListenEventAccess() else {
-                throw InitError.message("Input Monitoring permission required. Enable it in System Settings → Privacy & Security → Input Monitoring.")
+            if !CGPreflightListenEventAccess() {
+                CGRequestListenEventAccess()
+                throw InitError.message("Input Monitoring permission requested. Grant it in the system prompt, then restart the app.")
             }
             let granted = hotkey.start()
             if !granted {

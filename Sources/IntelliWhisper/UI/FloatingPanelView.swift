@@ -288,7 +288,7 @@ private struct ResultView: View {
             HStack {
                 Image(systemName: output.pasted ? "text.cursor" : "doc.on.clipboard")
                     .foregroundStyle(.green)
-                Text(output.pasted ? "Pasted" : "Copied to clipboard")
+                Text(output.pasted && output.keptOnClipboard ? "Pasted & copied" : output.pasted ? "Pasted" : "Copied to clipboard")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()

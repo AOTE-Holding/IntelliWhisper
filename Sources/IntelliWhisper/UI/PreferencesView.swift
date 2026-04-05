@@ -126,16 +126,32 @@ private struct GeneralTab: View {
                 Picker("After transcription", selection: $settings.outputMode) {
                     Text("Copy to clipboard").tag(OutputMode.clipboard.rawValue)
                     Text("Paste directly").tag(OutputMode.paste.rawValue)
+                    Text("Paste and keep on clipboard").tag(OutputMode.clipboardAndPaste.rawValue)
                 }
                 .onChange(of: settings.outputMode) { _, newValue in
                     orchestrator.outputMode = OutputMode(rawValue: newValue) ?? .clipboard
                 }
 
                 if settings.outputMode == OutputMode.paste.rawValue {
-                    Text("Requires Accessibility permission. Text is also saved to clipboard.")
+                    Text("Requires Accessibility permission. Original clipboard is restored after paste.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if settings.outputMode == OutputMode.clipboardAndPaste.rawValue {
+                    Text("Requires Accessibility permission. Text stays on clipboard after paste.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+            }
+
+            Section("Widget") {
+                Button("Reset widget position") {
+                    settings.resetPanelPosition()
+                }
+                .disabled(settings.panelPosition == nil)
+
+                Text("Drag the floating widget to reposition it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("System") {

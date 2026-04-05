@@ -10,6 +10,7 @@ import SwiftUI
 final class FloatingPanelController {
     private var panel: NSPanel?
     private let orchestrator: PipelineOrchestrator
+    private let settings: SettingsService
     private var cancellables = Set<AnyCancellable>()
     private var autoHideTask: Task<Void, Never>?
     private var escapeMonitor: Any?
@@ -18,9 +19,11 @@ final class FloatingPanelController {
     /// Preview duration in seconds before auto-hiding the result.
     var previewDuration: TimeInterval = 2.0
 
-    init(orchestrator: PipelineOrchestrator) {
+    init(orchestrator: PipelineOrchestrator, settings: SettingsService) {
         self.orchestrator = orchestrator
+        self.settings = settings
         observeState()
+        observePositionReset()
     }
 
     // MARK: - State observation
@@ -95,6 +98,22 @@ final class FloatingPanelController {
         }
     }
 
+    // MARK: - Position reset observation
+
+    private func observePositionReset() {
+        settings.$panelPosition
+            .receive(on: RunLoop.main)
+            .sink { [weak self] newValue in
+                guard let self, let panel = self.panel as? TopAnchoredPanel else { return }
+                if newValue == nil {
+                    panel.useCustomPosition = false
+                    panel.customTopLeft = nil
+                    self.centerPanel(panel)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
     // MARK: - Panel management
 
     private func showPanel() {
@@ -161,8 +180,19 @@ final class FloatingPanelController {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.contentViewController = hostingController
 
-        // Center below menu bar
-        centerPanel(panel)
+        // Load saved position or center below menu bar
+        if let savedPoint = settings.panelPositionPoint, isPointOnScreen(savedPoint) {
+            panel.useCustomPosition = true
+            panel.customTopLeft = savedPoint
+            panel.setFrameTopLeftPoint(savedPoint)
+        } else {
+            settings.resetPanelPosition()
+            centerPanel(panel)
+        }
+
+        panel.onPositionChanged = { [weak self] topLeft in
+            self?.settings.savePanelPosition(topLeft)
+        }
 
         self.panel = panel
     }
@@ -175,14 +205,28 @@ final class FloatingPanelController {
         let y = visibleFrame.maxY - 4
         panel.setFrameTopLeftPoint(NSPoint(x: x, y: y))
     }
+
+    private func isPointOnScreen(_ point: NSPoint) -> Bool {
+        NSScreen.screens.contains { screen in
+            screen.frame.contains(point)
+        }
+    }
 }
 
 // MARK: - Top-anchored panel
 
-/// NSPanel subclass that keeps its top edge fixed when the content resizes.
-/// Prevents the visible "jump" caused by macOS default bottom-left anchoring
-/// followed by a deferred top-left correction.
+/// NSPanel subclass that keeps its top edge fixed when the content resizes
+/// and supports drag-to-reposition.
 private class TopAnchoredPanel: NSPanel {
+    var useCustomPosition = false
+    var customTopLeft: NSPoint?
+    var onPositionChanged: ((NSPoint) -> Void)?
+
+    override init(contentRect: NSRect, styleMask style: NSWindow.StyleMask, backing backingStoreType: NSWindow.BackingStoreType, defer flag: Bool) {
+        super.init(contentRect: contentRect, styleMask: style, backing: backingStoreType, defer: flag)
+        isMovableByWindowBackground = true
+    }
+
     override func setFrame(_ frameRect: NSRect, display flag: Bool) {
         guard isVisible else {
             super.setFrame(frameRect, display: flag)
@@ -191,11 +235,25 @@ private class TopAnchoredPanel: NSPanel {
         var rect = frameRect
         // Keep top edge pinned: adjust origin so maxY stays the same
         rect.origin.y = frame.maxY - rect.height
-        // Stay centered horizontally
-        if let screen = screen ?? NSScreen.main {
-            let visible = screen.visibleFrame
-            rect.origin.x = visible.origin.x + (visible.width - rect.width) / 2
+
+        if useCustomPosition, let custom = customTopLeft {
+            // Pin to custom x position
+            rect.origin.x = custom.x
+        } else {
+            // Default: center horizontally
+            if let screen = screen ?? NSScreen.main {
+                let visible = screen.visibleFrame
+                rect.origin.x = visible.origin.x + (visible.width - rect.width) / 2
+            }
         }
         super.setFrame(rect, display: flag)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        super.mouseUp(with: event)
+        let topLeft = NSPoint(x: frame.origin.x, y: frame.maxY)
+        customTopLeft = topLeft
+        useCustomPosition = true
+        onPositionChanged?(topLeft)
     }
 }

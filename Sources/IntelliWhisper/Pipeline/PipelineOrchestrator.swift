@@ -195,15 +195,19 @@ final class PipelineOrchestrator: ObservableObject {
                 guard !Task.isCancelled else { return }
 
                 let pasted: Bool
-                if self.outputMode == .paste {
+                switch self.outputMode {
+                case .paste:
                     pasted = await clipboard.copyAndPaste(text: formatted)
-                } else {
+                case .clipboardAndPaste:
+                    pasted = await clipboard.copyAndPasteKeeping(text: formatted)
+                case .clipboard:
                     clipboard.copy(text: formatted)
                     pasted = false
                 }
+                let keptOnClipboard = self.outputMode == .clipboardAndPaste || self.outputMode == .clipboard
                 let total = CFAbsoluteTimeGetCurrent() - pipelineStart
                 log.info("\(pasted ? "Pasted" : "Copied to clipboard") — total pipeline: \(String(format: "%.1f", total))s")
-                state = .result(FormattedOutput(text: formatted, context: context, pasted: pasted))
+                state = .result(FormattedOutput(text: formatted, context: context, pasted: pasted, keptOnClipboard: keptOnClipboard))
 
             } catch is CancellationError {
                 log.info("Cancelled")

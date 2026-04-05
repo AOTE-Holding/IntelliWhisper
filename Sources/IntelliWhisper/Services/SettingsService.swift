@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 /// Centralized settings store. All UserDefaults keys, default values, and
 /// persistence logic live here. UI binds to @Published properties; non-MainActor
@@ -23,6 +23,7 @@ final class SettingsService: ObservableObject {
         static let setupCompleted = "setupCompleted"
         static let vocabularyNames = "vocabularyNames"
         static let vocabularyKeywords = "vocabularyKeywords"
+        static let panelPosition = "panelPosition"
     }
 
     // MARK: - Defaults
@@ -112,6 +113,16 @@ final class SettingsService: ObservableObject {
         didSet { save(Keys.vocabularyKeywords, encodeJSON(vocabularyKeywords)) }
     }
 
+    @Published var panelPosition: String? {
+        didSet {
+            if let panelPosition {
+                save(Keys.panelPosition, panelPosition)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Keys.panelPosition)
+            }
+        }
+    }
+
     /// True if UserDefaults contained any hotkey value before this init ran,
     /// meaning the user has launched the app before. Used by the setup wizard
     /// to decide whether to offer "keep current key" vs "use default (Fn)".
@@ -143,6 +154,24 @@ final class SettingsService: ObservableObject {
         self.setupCompleted = d.bool(forKey: Keys.setupCompleted)
         self.vocabularyNames = decodeJSON(d.string(forKey: Keys.vocabularyNames)) ?? []
         self.vocabularyKeywords = decodeJSON(d.string(forKey: Keys.vocabularyKeywords)) ?? []
+        self.panelPosition = d.string(forKey: Keys.panelPosition)
+    }
+
+    // MARK: - Panel position helpers
+
+    var panelPositionPoint: NSPoint? {
+        guard let pos = panelPosition else { return nil }
+        let parts = pos.split(separator: ",").compactMap { Double($0) }
+        guard parts.count == 2 else { return nil }
+        return NSPoint(x: parts[0], y: parts[1])
+    }
+
+    func savePanelPosition(_ point: NSPoint) {
+        panelPosition = "\(point.x),\(point.y)"
+    }
+
+    func resetPanelPosition() {
+        panelPosition = nil
     }
 
     // MARK: - Persistence

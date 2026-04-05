@@ -105,7 +105,8 @@ final class MenuBarController {
                 button.image = NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: "Loading model")
                 button.image?.isTemplate = true
                 button.toolTip = "IntelliWhisper — Loading speech model…"
-            } else if !orchestrator.ollamaAvailable {
+            } else if !orchestrator.ollamaAvailable &&
+                      (orchestrator.settings.formatGeneral || orchestrator.settings.formatEmail) {
                 button.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: "Ollama unavailable")
                 button.image?.isTemplate = true
                 button.toolTip = "IntelliWhisper — Ready (formatting unavailable)"

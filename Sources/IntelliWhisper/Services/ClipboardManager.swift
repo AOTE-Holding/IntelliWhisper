@@ -89,6 +89,33 @@ final class ClipboardManager {
         return true
     }
 
+    /// Copy text to the clipboard, simulate Cmd+V to paste it into the
+    /// frontmost application, and keep the text on the clipboard afterward.
+    /// Returns true if the paste was attempted, false if accessibility
+    /// permission is missing (text remains on clipboard as fallback).
+    @discardableResult
+    func copyAndPasteKeeping(text: String) async -> Bool {
+        copy(text: text)
+
+        guard AXIsProcessTrusted() else {
+            log.warning("Accessibility not trusted — paste skipped, text is on clipboard")
+            return false
+        }
+
+        try? await Task.sleep(for: .milliseconds(50))
+
+        let source = CGEventSource(stateID: .combinedSessionState)
+        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
+        let keyUp   = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
+        keyDown?.flags = CGEventFlags.maskCommand
+        keyUp?.flags   = CGEventFlags.maskCommand
+        keyDown?.post(tap: CGEventTapLocation.cghidEventTap)
+        keyUp?.post(tap: CGEventTapLocation.cghidEventTap)
+
+        log.info("Simulated Cmd+V paste (keeping clipboard)")
+        return true
+    }
+
     /// Restore the clipboard content that was overwritten by the last copy().
     func undo() {
         guard let previous = previousItem else {

@@ -66,6 +66,59 @@ final class FirstRunCoordinator: ObservableObject {
         self.orchestrator = orchestrator
     }
 
+    // MARK: - Auto-advance past already-granted permissions
+
+    /// Check which permissions are already granted and skip past them.
+    /// Called when the wizard appears (handles restart-after-grant scenarios).
+    func autoAdvancePastGranted() async {
+        // Microphone
+        if currentStep == .microphone {
+            let micGranted = await AVCaptureDevice.requestAccess(for: .audio)
+            if micGranted {
+                stepStatuses[.microphone] = .granted
+                advance()
+            } else {
+                return
+            }
+        }
+
+        // Screen Recording
+        if currentStep == .screenRecording {
+            let screenGranted: Bool
+            if #available(macOS 15, *) {
+                screenGranted = CGPreflightScreenCaptureAccess()
+            } else {
+                screenGranted = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) != nil
+            }
+            if screenGranted {
+                stepStatuses[.screenRecording] = .granted
+                advance()
+            } else {
+                return
+            }
+        }
+
+        // Input Monitoring
+        if currentStep == .inputMonitoring {
+            if CGPreflightListenEventAccess() {
+                stepStatuses[.inputMonitoring] = .granted
+                advance()
+            } else {
+                return
+            }
+        }
+
+        // Hotkey — auto-confirm if previously configured
+        if currentStep == .hotkeySelection {
+            if settings.hotkeyWasPreviouslyConfigured {
+                stepStatuses[.hotkeySelection] = .granted
+                advance()
+            } else {
+                return
+            }
+        }
+    }
+
     // MARK: - Step actions
 
     func requestMicrophone() async {

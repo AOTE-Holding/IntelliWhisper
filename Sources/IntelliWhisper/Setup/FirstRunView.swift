@@ -65,6 +65,9 @@ struct FirstRunView: View {
             .padding(16)
         }
         .frame(width: 520, height: 480)
+        .task {
+            await coordinator.autoAdvancePastGranted()
+        }
     }
 
     // MARK: - Step routing

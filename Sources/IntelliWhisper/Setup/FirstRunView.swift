@@ -81,6 +81,8 @@ struct FirstRunView: View {
             ScreenRecordingStepView(coordinator: coordinator)
         case .inputMonitoring:
             InputMonitoringStepView(coordinator: coordinator)
+        case .accessibility:
+            AccessibilityStepView(coordinator: coordinator)
         case .hotkeySelection:
             HotkeySelectionStepView(coordinator: coordinator)
         case .ollama:
@@ -209,6 +211,32 @@ private struct InputMonitoringStepView: View {
                 .padding(.top, 4)
 
                 Text("Add IntelliWhisper in Input Monitoring, then quit and relaunch the app.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 2)
+            }
+        }
+    }
+}
+
+private struct AccessibilityStepView: View {
+    @ObservedObject var coordinator: FirstRunCoordinator
+
+    var body: some View {
+        StepLayout(
+            icon: "accessibility",
+            title: "Accessibility",
+            description: "Accessibility permission allows IntelliWhisper to automatically paste transcribed text into your active application using simulated Cmd+V."
+        ) {
+            StepActionButton(
+                status: coordinator.stepStatuses[.accessibility] ?? .pending,
+                label: "Grant Access"
+            ) {
+                coordinator.requestAccessibility()
+            }
+
+            if case .failed = coordinator.stepStatuses[.accessibility] {
+                Text("Add IntelliWhisper in Accessibility, then click Retry above.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.top, 2)

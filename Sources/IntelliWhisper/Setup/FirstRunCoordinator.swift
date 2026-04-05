@@ -16,6 +16,7 @@ final class FirstRunCoordinator: ObservableObject {
         case microphone
         case screenRecording
         case inputMonitoring
+        case accessibility
         case hotkeySelection
         case ollama
         case modelDownload
@@ -108,6 +109,16 @@ final class FirstRunCoordinator: ObservableObject {
             }
         }
 
+        // Accessibility
+        if currentStep == .accessibility {
+            if AXIsProcessTrusted() {
+                stepStatuses[.accessibility] = .granted
+                advance()
+            } else {
+                return
+            }
+        }
+
         // Hotkey — auto-confirm if previously configured
         if currentStep == .hotkeySelection {
             if settings.hotkeyWasPreviouslyConfigured {
@@ -165,6 +176,20 @@ final class FirstRunCoordinator: ObservableObject {
     func openInputMonitoringSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
             NSWorkspace.shared.open(url)
+        }
+    }
+
+    func requestAccessibility() {
+        stepStatuses[.accessibility] = .inProgress
+        // "AXTrustedCheckOptionPrompt" is the string value of kAXTrustedCheckOptionPrompt
+        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        let trusted = AXIsProcessTrustedWithOptions(options)
+        if trusted {
+            stepStatuses[.accessibility] = .granted
+        } else {
+            stepStatuses[.accessibility] = .failed(
+                "Accessibility required for auto-paste. Enable it in System Settings → Privacy & Security → Accessibility, then click Retry."
+            )
         }
     }
 

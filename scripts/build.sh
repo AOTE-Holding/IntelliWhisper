@@ -232,6 +232,10 @@ if ! su "$INSTALL_USER" -c "defaults read com.apple.dock persistent-apps" | grep
     su "$INSTALL_USER" -c "defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>$APP_PATH</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'"
     su "$INSTALL_USER" -c "killall Dock" 2>/dev/null || true
 fi
+
+# Close the Installer.app window
+killall Installer 2>/dev/null || true
+
 exit 0
 POSTINSTALL
     chmod +x "$PKG_SCRIPTS/postinstall"

@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
     private var menuBarController: MenuBarController!
     private var floatingPanelController: FloatingPanelController!
     private var healthCheckTimer: Timer?
+    private var accessibilityTimer: Timer?
 
     // First-run
     private var firstRunWindow: NSWindow?
@@ -103,6 +104,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
                     formatter: formatter,
                     orchestrator: orchestrator
                 )
+                // Poll for Accessibility permission — auto-restart when granted
+                if !AXIsProcessTrusted() {
+                    self.startAccessibilityPolling()
+                }
             }
             startHealthCheckTimer()
         }
@@ -111,6 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
     func applicationWillTerminate(_ notification: Notification) {
         log.info("App terminating")
         healthCheckTimer?.invalidate()
+        accessibilityTimer?.invalidate()
     }
 
     // MARK: - First-run window
@@ -128,30 +134,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
-        // Re-activate after a delay to steal focus back from the pkg installer
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak window] in
-            NSApp.activate(ignoringOtherApps: true)
-            window?.makeKeyAndOrderFront(nil)
-        }
-
         firstRunWindow = window
     }
 
     @MainActor
     private func firstRunCompleted() {
-        log.info("First-run wizard completed — relaunching app for permissions to take effect")
+        log.info("First-run wizard completed — relaunching for permissions to take effect")
         firstRunWindow?.close()
 
-        // Relaunch via 'open' after a brief delay so the current process can terminate cleanly
-        let bundlePath = Bundle.main.bundlePath
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
-            let task = Process()
-            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-            task.arguments = [bundlePath]
-            try? task.run()
+        let bundleURL = Bundle.main.bundleURL
+        NSWorkspace.shared.openApplication(
+            at: bundleURL,
+            configuration: NSWorkspace.OpenConfiguration()
+        ) { _, _ in
+            DispatchQueue.main.async {
+                NSApp.terminate(nil)
+            }
         }
+    }
 
-        NSApp.terminate(nil)
+    // MARK: - Accessibility polling
+
+    @MainActor
+    private func startAccessibilityPolling() {
+        log.info("Accessibility not trusted — polling for permission grant")
+        accessibilityTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            if AXIsProcessTrusted() {
+                self?.accessibilityTimer?.invalidate()
+                self?.accessibilityTimer = nil
+                log.info("Accessibility granted — relaunching to activate")
+                let bundleURL = Bundle.main.bundleURL
+                NSWorkspace.shared.openApplication(
+                    at: bundleURL,
+                    configuration: NSWorkspace.OpenConfiguration()
+                ) { _, _ in
+                    DispatchQueue.main.async {
+                        NSApp.terminate(nil)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Health check

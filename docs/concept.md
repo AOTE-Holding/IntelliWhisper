@@ -22,11 +22,11 @@ Intelliwhisper must be delivered as a standalone swift desktop app (macOS) capab
 
 ### Interaction Model
 
-The app uses a **push-to-talk** workflow: the user holds a configurable hotkey (default: Fn/Globe; also Right Option or § key) to record, releases to stop. The result is either copied to the clipboard or auto-pasted into the active app (configurable; auto-paste requires Accessibility permission). A non-activating floating panel provides visual feedback (recording state, processing, result preview) without stealing focus from the target application. A persistent menu bar icon indicates app state and provides access to clipboard history and preferences.
+The app uses a **push-to-talk** workflow: the user holds a configurable hotkey (default: Fn/Globe; also Right Option or § key) to record, releases to stop. An optional **hands-free mode** changes this to press-once-to-start / press-again-to-stop; pressing L during recording locks it so the hotkey can be released while capture continues. The result is delivered per the configured output mode: copy to clipboard, auto-paste (simulated Cmd+V, requires Accessibility permission), or paste and keep on clipboard. A non-activating floating panel provides visual feedback (recording state, processing, result preview) without stealing focus from the target application. A persistent menu bar icon indicates app state and provides access to clipboard history and preferences.
 
 ### Processing Pipeline
 
-Four subsystems execute in sequence: **audio capture** (WhisperKit AudioProcessor) → **transcription** (Whisper via Core ML, default: small) → **context detection** (active app identification) → **cleanup** (Ollama LLM via local REST API with streaming — separate system prompts for general and email context, each with few-shot examples). Each subsystem is defined by a Swift protocol, keeping implementations swappable and the pipeline extensible. Formatting can be independently enabled/disabled per context (general and email) in preferences.
+Four subsystems execute in sequence: **audio capture** (WhisperKit AudioProcessor) → **transcription** (Whisper via Core ML, default: small; user-configurable vocabulary hints bias the model toward domain-specific terms) → **context detection** (active app identification) → **cleanup** (Ollama LLM via local REST API with streaming — separate system prompts for general and email context, user-configurable). Each subsystem is defined by a Swift protocol, keeping implementations swappable and the pipeline extensible. Formatting can be independently enabled/disabled per context in preferences.
 
 ### Context Detection
 
@@ -34,7 +34,7 @@ The app identifies the target format by inspecting the foreground application at
 
 ### Language & Formality
 
-The default transcription language is German (configurable). The detected language is passed to Ollama so output matches the input language. For German emails, formality defaults to "Sie" unless the speaker explicitly uses "du".
+The default transcription language is German (configurable; options include English and auto-detect). The detected language is passed to Ollama so output matches the input language. For German emails, the system prompt instructs Ollama to default to "Sie" formality unless the speaker explicitly uses "du".
 
 ### Distribution & Dependencies
 

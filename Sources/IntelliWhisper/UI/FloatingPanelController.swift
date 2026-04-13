@@ -221,6 +221,7 @@ private class TopAnchoredPanel: NSPanel {
     var useCustomPosition = false
     var customTopLeft: NSPoint?
     var onPositionChanged: ((NSPoint) -> Void)?
+    private var isSettingFrame = false
 
     override init(contentRect: NSRect, styleMask style: NSWindow.StyleMask, backing backingStoreType: NSWindow.BackingStoreType, defer flag: Bool) {
         super.init(contentRect: contentRect, styleMask: style, backing: backingStoreType, defer: flag)
@@ -228,6 +229,15 @@ private class TopAnchoredPanel: NSPanel {
     }
 
     override func setFrame(_ frameRect: NSRect, display flag: Bool) {
+        // Re-entrancy guard must come first — before the isVisible check.
+        // On macOS Tahoe, NSHostingView.windowDidLayout() → updateAnimatedWindowSize()
+        // calls setFrame from within the layout pass triggered by super.setFrame, both
+        // when the window is visible AND when it is being ordered front (isVisible = false).
+        // If the guard is placed after the isVisible check, the !isVisible path calls
+        // super.setFrame → layout → setFrame again, bypassing the guard entirely → crash.
+        guard !isSettingFrame else { return }
+        isSettingFrame = true
+        defer { isSettingFrame = false }
         guard isVisible else {
             super.setFrame(frameRect, display: flag)
             return

@@ -251,9 +251,26 @@ private struct ContextIcon: View {
 }
 
 private struct FormattingIcon: View {
+    // Load without Bundle.module: the auto-generated accessor embeds the build-machine
+    // path as a fallback (~/Downloads/…), causing a macOS privacy prompt and fatalError
+    // when that path is inaccessible on another machine or after a clean install.
+    // Instead we search the two locations the bundle actually lives in:
+    //   • Installed app: Contents/Resources/IntelliWhisper_IntelliWhisper.bundle
+    //   • Development (swift build): next to the binary
+    private static let image: NSImage? = {
+        if let bundleURL = Bundle.main.url(forResource: "IntelliWhisper_IntelliWhisper", withExtension: "bundle"),
+           let rb = Bundle(url: bundleURL),
+           let url = rb.url(forResource: "ollama@2x", withExtension: "png") {
+            return NSImage(contentsOf: url)
+        }
+        let devURL = Bundle.main.bundleURL
+            .appendingPathComponent("IntelliWhisper_IntelliWhisper.bundle")
+            .appendingPathComponent("ollama@2x.png")
+        return NSImage(contentsOf: devURL)
+    }()
+
     var body: some View {
-        if let url = Bundle.module.url(forResource: "ollama@2x", withExtension: "png"),
-           let nsImage = NSImage(contentsOf: url) {
+        if let nsImage = Self.image {
             Image(nsImage: nsImage)
                 .renderingMode(.template)
                 .resizable()

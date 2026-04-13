@@ -8,8 +8,8 @@ let package = Package(
         .macOS(.v14)
     ],
     dependencies: [
-        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.12.0"),
-        .package(url: "https://github.com/SwiftyBeaver/SwiftyBeaver.git", from: "2.1.0"),
+        .package(url: "https://github.com/argmaxinc/WhisperKit.git", exact: "0.12.0"),
+        .package(url: "https://github.com/SwiftyBeaver/SwiftyBeaver.git", exact: "2.1.0"),
     ],
     targets: [
         .executableTarget(

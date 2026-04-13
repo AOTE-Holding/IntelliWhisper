@@ -36,10 +36,19 @@ build_launcher() {
     local macos_dir="$launcher_app/Contents/MacOS"
     local plist="$launcher_app/Contents/Info.plist"
 
+    local resources_dir="$launcher_app/Contents/Resources"
+
     # Build a real app bundle from scratch (no osacompile) so the binary
     # identity is genuinely "IntelliWhisper", not the system "applet".
     rm -rf "$launcher_app"
     mkdir -p "$macos_dir"
+    mkdir -p "$resources_dir"
+
+    # App icon
+    local icon_src="$PROJECT_ROOT/Resources/${APP_NAME}.icns"
+    if [ -f "$icon_src" ]; then
+        cp "$icon_src" "$resources_dir/${APP_NAME}.icns"
+    fi
 
     # Launcher executable — a simple shell script
     cat > "$macos_dir/${APP_NAME}" <<'LAUNCHER'
@@ -64,6 +73,8 @@ LAUNCHER
     <string>de.intellilab.${APP_NAME}.Launcher</string>
     <key>CFBundleVersion</key>
     <string>1.0</string>
+    <key>CFBundleIconFile</key>
+    <string>${APP_NAME}</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSUIElement</key>
@@ -138,13 +149,23 @@ if $BUILD_PKG; then
     echo "  Creating launcher..."
     build_launcher "$INSTALL_DIR"
 
-    # postinstall: auto-launch after installation
+    # postinstall: auto-launch and add to Dock after installation
     cat > "$PKG_SCRIPTS/postinstall" <<'POSTINSTALL'
 #!/bin/bash
-CORE_APP="/Applications/IntelliWhisper/IntelliWhisper Core.app"
+TARGET="${2%/}"
+APP_PATH="$TARGET/Applications/IntelliWhisper/IntelliWhisper.app"
+CORE_APP="$TARGET/Applications/IntelliWhisper/IntelliWhisper Core.app"
+INSTALL_USER="${USER:-$(stat -f '%Su' /dev/console)}"
+
+# Launch the core app
 if [ -d "$CORE_APP" ]; then
-    INSTALL_USER="${USER:-$(stat -f '%Su' /dev/console)}"
     su "$INSTALL_USER" -c "open '$CORE_APP'" &
+fi
+
+# Add launcher to Dock if not already present
+if ! su "$INSTALL_USER" -c "defaults read com.apple.dock persistent-apps" | grep -q "IntelliWhisper.app"; then
+    su "$INSTALL_USER" -c "defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>$APP_PATH</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'"
+    su "$INSTALL_USER" -c "killall Dock" 2>/dev/null || true
 fi
 exit 0
 POSTINSTALL

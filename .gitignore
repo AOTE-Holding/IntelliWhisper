@@ -72,7 +72,9 @@ fastlane/test_output
 *~
 
 # Claude Code
-.claude/
+.claude/*
+!.claude/commands/
+!.claude/commands/**
 
 # GitNexus
 .gitnexus/

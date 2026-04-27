@@ -110,6 +110,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
                 }
             }
             startHealthCheckTimer()
+
+            // Silently check for updates in the background (rate-limited to once/hour)
+            Task { await menuBarController.performUpdateCheck(silent: true) }
         }
     }
 
@@ -131,8 +134,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
         window.styleMask = [.titled, .closable]
         window.setContentSize(NSSize(width: 520, height: 480))
         window.center()
+        // Follow the user to their active Space so the window is never invisible
+        // behind a full-screen app or a different Space.
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate()
         window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async {
+            NSApp.activate()
+            window.makeKeyAndOrderFront(nil)
+        }
 
         firstRunWindow = window
     }
@@ -142,12 +153,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
         log.info("First-run wizard completed — relaunching for permissions to take effect")
         firstRunWindow?.close()
 
-        let bundleURL = Bundle.main.bundleURL
+        // After an update the wizard runs from /tmp (the old app launched us
+        // from there so the window would get proper foreground focus). Now that
+        // the wizard is complete we must relaunch from the permanent
+        // /Applications copy — that's where the swap script installed the new
+        // binary. For normal first-run installs, that path also exists and is
+        // preferred over Bundle.main.bundleURL so the behaviour is identical.
+        let permanentApp = URL(
+            fileURLWithPath: "/Applications/IntelliWhisper/IntelliWhisper Core.app"
+        )
+        let launchURL = FileManager.default.fileExists(atPath: permanentApp.path)
+            ? permanentApp
+            : Bundle.main.bundleURL  // fallback for dev builds not in /Applications
+
+        let runningFromTmp = Bundle.main.bundleURL.path.hasPrefix("/tmp/")
+        log.info("Relaunching from \(launchURL.path) (fromTmp: \(runningFromTmp))")
+
         NSWorkspace.shared.openApplication(
-            at: bundleURL,
+            at: launchURL,
             configuration: NSWorkspace.OpenConfiguration()
         ) { _, _ in
             DispatchQueue.main.async {
+                // The new /Applications instance is running; safe to remove
+                // the tmp bundle we were launched from.
+                if runningFromTmp {
+                    try? FileManager.default.removeItem(atPath: "/tmp/iw-update")
+                }
                 NSApp.terminate(nil)
             }
         }

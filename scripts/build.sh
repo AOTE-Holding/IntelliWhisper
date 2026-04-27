@@ -159,13 +159,14 @@ if [ -d "$RESOURCE_BUNDLE" ]; then
     cp -R "$RESOURCE_BUNDLE" "$APP_BUNDLE/Contents/Resources/"
 fi
 
-# ---------------------------------------------------------------------------
-# Sign (release only)
-# ---------------------------------------------------------------------------
-if [[ "$CONFIG" == "release" ]]; then
-    echo "Signing app bundle..."
-    codesign --force --sign - "$APP_BUNDLE"
-fi
+# Re-sign with an identifier-only designated requirement so TCC stores
+# "identifier de.intellilab.IntelliWhisper" as the CSREQ — stable across
+# binary replacements — instead of the CDHash which changes every build
+# and causes TCC to invalidate Input Monitoring after each update.
+codesign --force --sign - \
+    --identifier "de.intellilab.IntelliWhisper" \
+    --requirements "=designated => identifier \"de.intellilab.IntelliWhisper\"" \
+    "$APP_BUNDLE"
 
 # ---------------------------------------------------------------------------
 # Artifact: .pkg installer
@@ -186,24 +187,24 @@ if $BUILD_PKG; then
     echo "  Creating launcher..."
     build_launcher "$INSTALL_DIR"
 
-    # preinstall: clean slate — kill old app, remove old install, reset TCC + wizard
+    # preinstall: kill old app, remove old install, reset TCC + wizard on fresh install only
     cat > "$PKG_SCRIPTS/preinstall" <<'PREINSTALL'
 #!/bin/bash
 BUNDLE_ID="de.intellilab.IntelliWhisper"
-INSTALL_USER="${USER:-$(stat -f '%Su' /dev/console)}"
+INSTALL_USER=$(stat -f '%Su' /dev/console 2>/dev/null); INSTALL_USER="${INSTALL_USER:-$USER}"
 
 # 1. Kill running IntelliWhisper processes
 pkill -x "IntelliWhisper" 2>/dev/null || true
 sleep 1
 pkill -9 -x "IntelliWhisper" 2>/dev/null || true
 
-# 2. Remove old installation completely
+# 2. Remove old installation
 rm -rf "/Applications/IntelliWhisper" 2>/dev/null || true
 
-# 3. Reset ALL TCC permissions for this bundle ID
+# 3. Reset TCC and wizard so the setup wizard re-runs permission grants fresh.
+#    Input Monitoring is tied to the binary's CDHash internally and always
+#    breaks after a binary replacement, so a full reset is required on every install.
 su "$INSTALL_USER" -c "tccutil reset All '$BUNDLE_ID'" 2>/dev/null || true
-
-# 4. Reset setup wizard so it runs fresh on next launch
 su "$INSTALL_USER" -c "defaults delete '$BUNDLE_ID' setupCompleted" 2>/dev/null || true
 
 exit 0
@@ -216,11 +217,15 @@ PREINSTALL
 TARGET="${2%/}"
 APP_PATH="$TARGET/Applications/IntelliWhisper/IntelliWhisper.app"
 CORE_APP="$TARGET/Applications/IntelliWhisper/IntelliWhisper Core.app"
-INSTALL_USER="${USER:-$(stat -f '%Su' /dev/console)}"
+INSTALL_USER=$(stat -f '%Su' /dev/console 2>/dev/null); INSTALL_USER="${INSTALL_USER:-$USER}"
 
 # Strip quarantine flags to avoid Gatekeeper delay on first launch
 xattr -cr "$CORE_APP" 2>/dev/null || true
 xattr -cr "$APP_PATH" 2>/dev/null || true
+
+# Give the installing user ownership of the app directory so the in-app
+# updater can replace IntelliWhisper Core.app without needing sudo
+chown -R "$INSTALL_USER" "$TARGET/Applications/IntelliWhisper" 2>/dev/null || true
 
 # Launch the core app
 if [ -d "$CORE_APP" ]; then
@@ -240,11 +245,40 @@ exit 0
 POSTINSTALL
     chmod +x "$PKG_SCRIPTS/postinstall"
 
-    # Disable bundle relocation so .app always installs to /Applications
+    # Write a fixed component.plist instead of using pkgbuild --analyze.
+    # --analyze can detect 3+ bundles (including the nested resource .bundle
+    # inside Core.app), and our plutil commands would only patch indices 0 and 1,
+    # leaving any third entry with BundleIsRelocatable=true — causing the installer
+    # to place that app wherever it finds an existing copy on disk instead of here.
     COMPONENT_PLIST="$BUILD_DIR/component.plist"
-    pkgbuild --analyze --root "$PKG_ROOT" "$COMPONENT_PLIST"
-    plutil -replace 0.BundleIsRelocatable -bool false "$COMPONENT_PLIST"
-    plutil -replace 1.BundleIsRelocatable -bool false "$COMPONENT_PLIST"
+    cat > "$COMPONENT_PLIST" <<'COMPONENT_PLIST_EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+    <dict>
+        <key>BundleIsRelocatable</key>
+        <false/>
+        <key>BundleIsVersionChecked</key>
+        <false/>
+        <key>BundleOverwriteAction</key>
+        <string>upgrade</string>
+        <key>RootRelativeBundlePath</key>
+        <string>Applications/IntelliWhisper/IntelliWhisper Core.app</string>
+    </dict>
+    <dict>
+        <key>BundleIsRelocatable</key>
+        <false/>
+        <key>BundleIsVersionChecked</key>
+        <false/>
+        <key>BundleOverwriteAction</key>
+        <string>upgrade</string>
+        <key>RootRelativeBundlePath</key>
+        <string>Applications/IntelliWhisper/IntelliWhisper.app</string>
+    </dict>
+</array>
+</plist>
+COMPONENT_PLIST_EOF
 
     PKG_PATH="$BUILD_DIR/${APP_NAME}.pkg"
     rm -f "$PKG_PATH"

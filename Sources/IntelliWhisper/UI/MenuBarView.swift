@@ -2,6 +2,23 @@ import AppKit
 import Combine
 import SwiftUI
 
+private final class AlertButtonProxy: NSObject {
+    private let text: String
+    init(text: String) { self.text = text }
+
+    @MainActor @objc func copyToClipboard(_ sender: NSButton) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        let original = sender.title
+        sender.title = "Copied!"
+        sender.isEnabled = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak sender] in
+            sender?.title = original
+            sender?.isEnabled = true
+        }
+    }
+}
+
 /// Panel subclass that prevents auto-focus on TextFields during initial
 /// appearance and resigns TextField focus when clicking empty areas.
 /// NSPanel is used instead of NSWindow so the panel can become key
@@ -25,7 +42,7 @@ final class PreferencesWindow: NSPanel {
 
     override func mouseDown(with event: NSEvent) {
         suppressInitialFocus = false
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         super.mouseDown(with: event)
         if firstResponder is NSTextView {
             _ = makeFirstResponder(contentView)
@@ -42,6 +59,7 @@ final class MenuBarController {
     private let orchestrator: PipelineOrchestrator
     private var cancellables = Set<AnyCancellable>()
     private var preferencesWindow: NSWindow?
+    private let updateService = UpdateService()
 
     init(orchestrator: PipelineOrchestrator) {
         self.orchestrator = orchestrator
@@ -145,6 +163,11 @@ final class MenuBarController {
         prefsItem.target = self
         menu.addItem(prefsItem)
 
+        // Check for Updates
+        let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdatesMenuAction), keyEquivalent: "")
+        updateItem.target = self
+        menu.addItem(updateItem)
+
         menu.addItem(.separator())
 
         // Quit
@@ -167,7 +190,7 @@ final class MenuBarController {
     @objc private func openPreferences() {
         if let window = preferencesWindow {
             NSApp.setActivationPolicy(.regular)
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
             window.makeKeyAndOrderFront(nil)
             return
         }
@@ -192,7 +215,7 @@ final class MenuBarController {
 
         setDockIcon()
         NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         window.makeKeyAndOrderFront(nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(200)) {
             window.enableFocus()
@@ -235,6 +258,175 @@ final class MenuBarController {
         )
         preferencesWindow = nil
         NSApp.setActivationPolicy(.accessory)
+    }
+
+    @objc private func checkForUpdatesMenuAction() {
+        Task { await performUpdateCheck(silent: false) }
+    }
+
+    func performUpdateCheck(silent: Bool) async {
+        guard let result = await updateService.checkForUpdates(silent: silent) else {
+            if !silent {
+                let alert = NSAlert()
+                alert.messageText = "Could not check for updates."
+                alert.informativeText = "Make sure you're connected to the internet and running IntelliWhisper from the app bundle, not a debug binary."
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "OK")
+                showAlert(alert)
+            }
+            return
+        }
+
+        switch result {
+        case .upToDate(let current, let remote):
+            guard !silent else { return }
+            let alert = NSAlert()
+            alert.messageText = "You're up to date."
+            alert.informativeText = "You're on version \(current), which is the latest\(current == remote ? "." : " (latest: \(remote)).")"
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "OK")
+            showAlert(alert)
+
+        case .updateAvailable(let info):
+            let commands = "git pull\n./scripts/build.sh --release --pkg\nopen .build/IntelliWhisper.pkg"
+            let alert = NSAlert()
+            alert.messageText = "IntelliWhisper v\(info.version) is available."
+            alert.informativeText = """
+                You're on version \(currentVersion()).
+
+                Run the following from your IntelliWhisper repo directory to update:
+
+                    \(commands.replacingOccurrences(of: "\n", with: "\n    "))
+
+                Or run /intelliwhisper-install in Claude Code.
+
+                Note: the setup wizard will re-run after the update to re-grant permissions.
+                """
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "Copy Commands")
+            alert.addButton(withTitle: "Later")
+            if !info.releaseNotes.isEmpty {
+                alert.accessoryView = makeNotesView(info.releaseNotes)
+            }
+            let proxy = AlertButtonProxy(text: commands)
+            alert.buttons[0].target = proxy
+            alert.buttons[0].action = #selector(AlertButtonProxy.copyToClipboard(_:))
+            showAlert(alert)
+        }
+    }
+
+    @discardableResult
+    private func showAlert(_ alert: NSAlert) -> NSApplication.ModalResponse {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate()
+        let response = alert.runModal()
+        NSApp.setActivationPolicy(.accessory)
+        return response
+    }
+
+    private func currentVersion() -> String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    }
+
+    private func makeNotesView(_ markdown: String) -> NSView {
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 420, height: 180))
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .bezelBorder
+
+        let textView = NSTextView(frame: scrollView.contentView.bounds)
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.drawsBackground = false
+        textView.autoresizingMask = [.width]
+        textView.textContainerInset = NSSize(width: 8, height: 8)
+        textView.textStorage?.setAttributedString(renderMarkdown(markdown))
+
+        scrollView.documentView = textView
+        return scrollView
+    }
+
+    private func renderMarkdown(_ markdown: String) -> NSAttributedString {
+        let bodyFont  = NSFont.systemFont(ofSize: 12)
+        let h2Font    = NSFont.boldSystemFont(ofSize: 14)
+        let h3Font    = NSFont.boldSystemFont(ofSize: 12)
+        let monoFont  = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        let label     = NSColor.labelColor
+        let codeBg    = NSColor(white: 0.5, alpha: 0.12)
+
+        let normalPara: NSParagraphStyle = {
+            let p = NSMutableParagraphStyle()
+            p.paragraphSpacing = 3
+            return p
+        }()
+        let headingPara: NSParagraphStyle = {
+            let p = NSMutableParagraphStyle()
+            p.paragraphSpacingBefore = 10
+            p.paragraphSpacing = 3
+            return p
+        }()
+        let listPara: NSParagraphStyle = {
+            let p = NSMutableParagraphStyle()
+            p.headIndent = 12
+            p.paragraphSpacing = 1
+            return p
+        }()
+
+        let out = NSMutableAttributedString()
+
+        // Appends plain text with given attributes.
+        func plain(_ text: String, font: NSFont, para: NSParagraphStyle) {
+            out.append(NSAttributedString(string: text + "\n", attributes: [
+                .font: font, .foregroundColor: label, .paragraphStyle: para
+            ]))
+        }
+
+        // Appends a line that may contain `code` and **bold** spans.
+        func inline(_ text: String, baseFont: NSFont, para: NSParagraphStyle, prefix: String = "") {
+            let line = NSMutableAttributedString()
+            if !prefix.isEmpty {
+                line.append(NSAttributedString(string: prefix, attributes: [
+                    .font: baseFont, .foregroundColor: label, .paragraphStyle: para
+                ]))
+            }
+            // Split on backticks: even indices = normal, odd = code
+            let backtickParts = text.components(separatedBy: "`")
+            for (i, part) in backtickParts.enumerated() {
+                if i % 2 == 1 {
+                    line.append(NSAttributedString(string: part, attributes: [
+                        .font: monoFont, .foregroundColor: label,
+                        .backgroundColor: codeBg, .paragraphStyle: para
+                    ]))
+                } else {
+                    // Within normal text, split on ** for bold
+                    let boldParts = part.components(separatedBy: "**")
+                    for (j, boldPart) in boldParts.enumerated() {
+                        let font = j % 2 == 1 ? NSFont.boldSystemFont(ofSize: baseFont.pointSize) : baseFont
+                        line.append(NSAttributedString(string: boldPart, attributes: [
+                            .font: font, .foregroundColor: label, .paragraphStyle: para
+                        ]))
+                    }
+                }
+            }
+            line.append(NSAttributedString(string: "\n"))
+            out.append(line)
+        }
+
+        for line in markdown.components(separatedBy: "\n") {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("## ") || t.hasPrefix("# ") {
+                let text = t.hasPrefix("## ") ? String(t.dropFirst(3)) : String(t.dropFirst(2))
+                plain(text, font: h2Font, para: headingPara)
+            } else if t.hasPrefix("### ") {
+                plain(String(t.dropFirst(4)), font: h3Font, para: headingPara)
+            } else if t.hasPrefix("- ") || t.hasPrefix("* ") {
+                inline(String(t.dropFirst(2)), baseFont: bodyFont, para: listPara, prefix: "• ")
+            } else if !t.isEmpty {
+                inline(t, baseFont: bodyFont, para: normalPara)
+            }
+        }
+
+        return out
     }
 
     @objc private func quit() {

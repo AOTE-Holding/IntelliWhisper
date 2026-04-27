@@ -24,6 +24,7 @@ final class SettingsService: ObservableObject {
         static let vocabularyNames = "vocabularyNames"
         static let vocabularyKeywords = "vocabularyKeywords"
         static let panelPosition = "panelPosition"
+        static let lastUpdateCheck = "lastUpdateCheck"
     }
 
     // MARK: - Defaults

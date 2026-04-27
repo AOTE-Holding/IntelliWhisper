@@ -4,7 +4,7 @@ import WhisperKit
 /// Records microphone audio using WhisperKit's AudioProcessor.
 /// Returns 16kHz mono Float32 samples for transcription.
 final class WhisperKitRecorder: AudioRecording, @unchecked Sendable {
-    private let processor = AudioProcessor()
+    private var processor = AudioProcessor()
     private let minimumDuration: TimeInterval = 0.5
     private var recordingStart: Date?
 
@@ -15,6 +15,12 @@ final class WhisperKitRecorder: AudioRecording, @unchecked Sendable {
 
     /// Begin capturing microphone audio.
     func startRecording() async throws {
+        // Create a fresh AudioProcessor for every recording session. Reusing the
+        // same instance can leave a stale tap installed on the audio input bus
+        // (e.g. after an in-app update killed the previous process mid-recording),
+        // which causes AVFAudio to throw an unrecoverable NSException on the next
+        // installTapOnBus call.
+        processor = AudioProcessor()
         recordingStart = Date()
         try processor.startRecordingLive(inputDeviceID: nil, callback: nil)
     }

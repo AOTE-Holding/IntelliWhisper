@@ -5,48 +5,59 @@ A macOS menu bar app for fully local, privacy-first speech-to-text. Hold a hotke
 ## Prerequisites
 
 - macOS 14 (Sonoma) or later
-- [Ollama](https://ollama.com) installed and running
+- git
+- Xcode Command Line Tools: `xcode-select --install`
+- [Ollama](https://ollama.com) installed and running (optional — the app falls back to raw transcription without it)
 
-## Installation
+## Install
 
-### Building the installer
+**Option A — Claude Code:**
+
+Open Claude Code in any directory and run:
+```
+/intelliwhisper-install
+```
+The command checks prerequisites, clones the repo to a location of your choice, builds, and installs.
+
+**Option B — Terminal:**
 
 ```bash
-./scripts/build.sh --pkg
+git clone https://github.com/AOTE-Holding/IntelliWhisper ~/Developer/IntelliWhisper
+cd ~/Developer/IntelliWhisper
+./scripts/build.sh --release --pkg
+open .build/IntelliWhisper.pkg
 ```
 
-This compiles the app and produces a `.pkg` installer at `.build/IntelliWhisper.pkg`.
+Click **Continue → Install** in the installer. The app launches automatically and the **setup wizard** walks you through permissions, hotkey configuration, and model download.
 
-> **Reinstalling or re-running the setup wizard?** Reset everything first, then rebuild:
+> **Want to fully uninstall first?** The installer handles permission and wizard resets automatically, so this is only needed if you want to remove the app before rebuilding:
 > ```bash
 > ./scripts/build.sh --reset-permissions
-> ./scripts/build.sh --pkg
 > ```
-> This removes the old installation, clears all saved permissions, and resets the setup wizard so it runs fresh on next launch.
 
-### Installing
+## Update
 
-1. Double-click `IntelliWhisper.pkg` (right-click → **Open** if macOS blocks it).
-2. Click through the installer (**Continue** → **Install**).
-3. The app launches automatically and the **setup wizard** appears — follow its steps.
-4. After the wizard completes, grant every permission that appears, then follow the **Permissions** steps below.
+When a new version is available, IntelliWhisper shows a notification in the menu bar. Open the menu and click **Check for Updates…** to see what changed and copy the update commands.
 
-To open the app manually at any time, click the **IntelliWhisper** icon in the Dock or open `/Applications/IntelliWhisper/IntelliWhisper.app`.
+**Option A — Claude Code (from your repo directory):**
+
+```
+/intelliwhisper-install
+```
+
+**Option B — Terminal (from your repo directory):**
+
+```bash
+git pull && ./scripts/build.sh --release --pkg && open .build/IntelliWhisper.pkg
+```
+
+Your app settings (hotkey, model, language) are preserved across updates. Permissions are reset on every install — the setup wizard re-runs automatically and guides you through re-granting them.
 
 ## Permissions
 
-IntelliWhisper needs a few macOS permissions to work. Grant them during the setup wizard or add them manually in **System Settings → Privacy & Security**.
+IntelliWhisper needs a few macOS permissions to work. The setup wizard guides you through each one. You can also grant them manually in **System Settings → Privacy & Security**.
 
 > The app appears as **IntelliWhisper Core** in System Settings — that is the correct entry to enable.
-
-**For the best results, follow this exact sequence after installation:**
-
-1. Grant **Microphone**, **Input Monitoring**, and **Screen Recording** when prompted by the wizard or in System Settings.
-2. **Quit IntelliWhisper** (click the menu bar icon → **Quit**).
-3. **Start IntelliWhisper** again (Dock icon or `/Applications/IntelliWhisper/IntelliWhisper.app`).
-4. In **System Settings → Privacy & Security → Accessibility**, enable **IntelliWhisper Core**.
-5. **Quit IntelliWhisper** again.
-6. **Start IntelliWhisper** one more time — it is now fully set up.
 
 **What each permission does:**
 

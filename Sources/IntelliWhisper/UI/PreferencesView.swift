@@ -39,7 +39,9 @@ struct PreferencesView: View {
 private struct GeneralTab: View {
     @ObservedObject var settings: SettingsService
     @ObservedObject var orchestrator: PipelineOrchestrator
-    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    // Initialised to false; updated asynchronously in .task to avoid blocking
+    // the main thread with SMAppService's IPC call during body evaluation.
+    @State private var launchAtLogin = false
 
     var body: some View {
         Form {
@@ -170,6 +172,9 @@ private struct GeneralTab: View {
             }
         }
         .formStyle(.grouped)
+        .task {
+            launchAtLogin = SMAppService.mainApp.status == .enabled
+        }
     }
 }
 

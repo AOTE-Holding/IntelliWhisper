@@ -108,7 +108,8 @@ struct FirstRunView: View {
     }
 
     private var canSkip: Bool {
-        coordinator.currentStep == .ollama
+        coordinator.currentStep == .ollama ||
+        coordinator.currentStep == .inputMonitoring
     }
 }
 
@@ -215,6 +216,12 @@ private struct InputMonitoringStepView: View {
                     .foregroundStyle(.secondary)
                     .padding(.top, 2)
             }
+
+            Text("Already granted but still stuck? On some systems the permission can't be verified automatically. Use the Skip button below to continue — transcription will still work, but the push-to-talk hotkey will be unavailable.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.top, 8)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

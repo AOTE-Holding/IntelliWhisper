@@ -162,15 +162,13 @@ final class FirstRunCoordinator: ObservableObject {
 
     func requestInputMonitoring() {
         stepStatuses[.inputMonitoring] = .inProgress
-
-        if CGPreflightListenEventAccess() {
-            stepStatuses[.inputMonitoring] = .granted
-        } else {
+        if !CGPreflightListenEventAccess() {
             CGRequestListenEventAccess()
-            stepStatuses[.inputMonitoring] = .failed(
-                "Input Monitoring required. Add IntelliWhisper in System Settings → Privacy & Security → Input Monitoring, then restart the app."
-            )
         }
+        // Can't verify in the current process — TCC caches the answer at launch.
+        // Mark optimistically; AppInitializer re-checks on next launch and the
+        // hotkey won't start if the permission was actually denied.
+        stepStatuses[.inputMonitoring] = .granted
     }
 
     func openInputMonitoringSettings() {

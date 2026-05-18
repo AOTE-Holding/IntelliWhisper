@@ -28,6 +28,10 @@ final class PipelineOrchestrator: ObservableObject {
     /// How the formatted output is delivered: clipboard-only or auto-paste.
     var outputMode: OutputMode = .clipboard
 
+    /// When true, checks the focused element before pasting; falls back to clipboard
+    /// only when a text field is confirmed absent. Unknown roles (browsers) defer to outputMode.
+    var smartPaste: Bool = false
+
     /// Whether the transcription model has finished loading.
     /// Recording is blocked until this is true.
     @Published var modelReady = false
@@ -194,20 +198,34 @@ final class PipelineOrchestrator: ObservableObject {
                 // Check we weren't cancelled (e.g. by a discard or new recording).
                 guard !Task.isCancelled else { return }
 
-                let pasted: Bool
-                switch self.outputMode {
-                case .paste:
-                    pasted = await clipboard.copyAndPaste(text: formatted)
-                case .clipboardAndPaste:
-                    pasted = await clipboard.copyAndPasteKeeping(text: formatted)
-                case .clipboard:
+                var pasted = false
+                var smartPasteFallback = false
+
+                // Smart paste only applies to .paste mode: if detection confirms no text
+                // field, fall back to clipboard. .unknown (browsers) defers to normal paste.
+                // .clipboardAndPaste always keeps text on clipboard so no fallback needed.
+                let detection: TextFieldDetectionResult = smartPaste && self.outputMode == .paste
+                    ? clipboard.detectFocusedTextField()
+                    : .confirmed
+
+                switch (self.outputMode, detection) {
+                case (.paste, .denied):
                     clipboard.copy(text: formatted)
-                    pasted = false
+                    smartPasteFallback = true
+                case (.paste, _):
+                    pasted = await clipboard.copyAndPaste(text: formatted)
+                case (.clipboardAndPaste, _):
+                    pasted = await clipboard.copyAndPasteKeeping(text: formatted)
+                case (.clipboard, _):
+                    clipboard.copy(text: formatted)
                 }
-                let keptOnClipboard = self.outputMode == .clipboardAndPaste || self.outputMode == .clipboard
+
+                let keptOnClipboard = self.outputMode == .clipboardAndPaste
+                    || self.outputMode == .clipboard
+                    || smartPasteFallback
                 let total = CFAbsoluteTimeGetCurrent() - pipelineStart
                 log.info("\(pasted ? "Pasted" : "Copied to clipboard") — total pipeline: \(String(format: "%.1f", total))s")
-                state = .result(FormattedOutput(text: formatted, context: context, pasted: pasted, keptOnClipboard: keptOnClipboard))
+                state = .result(FormattedOutput(text: formatted, context: context, pasted: pasted, keptOnClipboard: keptOnClipboard, smartPasteFallback: smartPasteFallback))
 
             } catch is CancellationError {
                 log.info("Cancelled")

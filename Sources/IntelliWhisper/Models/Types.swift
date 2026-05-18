@@ -25,6 +25,7 @@ struct FormattedOutput: Sendable {
     let context: FormatContext
     let pasted: Bool
     let keptOnClipboard: Bool
+    let smartPasteFallback: Bool
 }
 
 /// How the formatted output is delivered to the user.
@@ -32,6 +33,13 @@ enum OutputMode: String, Sendable, CaseIterable {
     case clipboard = "clipboard"
     case paste = "paste"
     case clipboardAndPaste = "clipboardAndPaste"
+}
+
+/// Result of checking whether the focused UI element can accept pasted text.
+enum TextFieldDetectionResult: Sendable {
+    case confirmed   // known editable AX role — safe to paste
+    case denied      // confirmed non-editable or no focused element
+    case unknown     // unrecognized role (browser, Electron) — defer to output mode
 }
 
 /// Available Whisper model variants for on-device transcription.

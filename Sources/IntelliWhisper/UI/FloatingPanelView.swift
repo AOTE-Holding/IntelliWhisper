@@ -303,9 +303,16 @@ private struct ResultView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Image(systemName: output.pasted ? "text.cursor" : "doc.on.clipboard")
-                    .foregroundStyle(.green)
-                Text(output.pasted && output.keptOnClipboard ? "Pasted & copied" : output.pasted ? "Pasted" : "Copied to clipboard")
+                let icon = output.pasted && !output.smartPasteFallback ? "text.cursor" : "doc.on.clipboard"
+                let iconColor: Color = output.smartPasteFallback ? .orange : .green
+                let label: String = {
+                    if output.smartPasteFallback { return "No text field — copied" }
+                    if output.pasted && output.keptOnClipboard { return "Pasted & copied" }
+                    return output.pasted ? "Pasted" : "Copied to clipboard"
+                }()
+                Image(systemName: icon)
+                    .foregroundStyle(iconColor)
+                Text(label)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()

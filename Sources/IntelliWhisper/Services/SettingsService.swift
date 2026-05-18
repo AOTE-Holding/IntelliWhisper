@@ -25,6 +25,7 @@ final class SettingsService: ObservableObject {
         static let vocabularyKeywords = "vocabularyKeywords"
         static let panelPosition = "panelPosition"
         static let lastUpdateCheck = "lastUpdateCheck"
+        static let smartPaste = "smartPaste"
     }
 
     // MARK: - Defaults
@@ -80,6 +81,10 @@ final class SettingsService: ObservableObject {
 
     @Published var outputMode: String {
         didSet { save(Keys.outputMode, outputMode) }
+    }
+
+    @Published var smartPaste: Bool {
+        didSet { save(Keys.smartPaste, smartPaste) }
     }
 
     @Published var formatGeneral: Bool {
@@ -147,6 +152,7 @@ final class SettingsService: ObservableObject {
             d.set(migrated, forKey: Keys.hotkeyChoice)
         }
         self.outputMode = d.string(forKey: Keys.outputMode) ?? OutputMode.clipboard.rawValue
+        self.smartPaste = d.bool(forKey: Keys.smartPaste)
         self.formatGeneral = d.object(forKey: Keys.formatGeneral) as? Bool ?? true
         self.formatEmail = d.object(forKey: Keys.formatEmail) as? Bool ?? true
         self.generalSystemPrompt = d.string(forKey: Keys.generalSystemPrompt) ?? Self.defaultGeneralSystemPrompt

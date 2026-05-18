@@ -132,10 +132,18 @@ private struct GeneralTab: View {
                 }
                 .onChange(of: settings.outputMode) { _, newValue in
                     orchestrator.outputMode = OutputMode(rawValue: newValue) ?? .clipboard
+                    orchestrator.smartPaste = settings.smartPaste
                 }
 
                 if settings.outputMode == OutputMode.paste.rawValue {
                     Text("Requires Accessibility permission. Original clipboard is restored after paste.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Toggle("Smart paste", isOn: $settings.smartPaste)
+                        .onChange(of: settings.smartPaste) { _, newValue in
+                            orchestrator.smartPaste = newValue
+                        }
+                    Text("Only paste when a text field is confirmed focused. Falls back to clipboard if none is detected; attempts paste when uncertain (e.g. in browsers).")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else if settings.outputMode == OutputMode.clipboardAndPaste.rawValue {

@@ -116,6 +116,42 @@ final class ClipboardManager {
         return true
     }
 
+    private static let editableRoles: Set<String> = [
+        "AXTextField", "AXTextArea", "AXComboBox", "AXSearchField",
+    ]
+    private static let nonEditableRoles: Set<String> = [
+        "AXButton", "AXImage", "AXCheckBox", "AXRadioButton",
+        "AXWindow", "AXGroup", "AXList", "AXTable", "AXTabGroup",
+        "AXToolbar", "AXMenuBar", "AXApplication", "AXStaticText",
+    ]
+
+    /// Checks whether the frontmost app's focused element can accept pasted text.
+    /// Returns .confirmed for known editable roles, .denied when there is no focused
+    /// element or AX is not trusted, and .unknown for unrecognized roles (browsers,
+    /// Electron, terminals) where we cannot reliably determine editability.
+    func detectFocusedTextField() -> TextFieldDetectionResult {
+        guard AXIsProcessTrusted() else { return .denied }
+        guard let frontApp = NSWorkspace.shared.frontmostApplication else { return .denied }
+
+        let appElement = AXUIElementCreateApplication(frontApp.processIdentifier)
+        var focusedRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            appElement, kAXFocusedUIElementAttribute as CFString, &focusedRef
+        ) == .success, let focused = focusedRef else { return .denied }
+
+        // AXUIElementCopyAttributeValue always returns AXUIElement for focused-element attribute
+        // swiftlint:disable:next force_cast
+        let element = focused as! AXUIElement
+        var roleRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            element, kAXRoleAttribute as CFString, &roleRef
+        ) == .success, let role = roleRef as? String else { return .unknown }
+
+        if Self.editableRoles.contains(role) { return .confirmed }
+        if Self.nonEditableRoles.contains(role) { return .denied }
+        return .unknown
+    }
+
     /// Restore the clipboard content that was overwritten by the last copy().
     func undo() {
         guard let previous = previousItem else {

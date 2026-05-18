@@ -177,6 +177,14 @@ private struct GeneralTab: View {
                             launchAtLogin = SMAppService.mainApp.status == .enabled
                         }
                     }
+
+                HStack {
+                    Text("Version")
+                    Spacer()
+                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown")
+                        .foregroundStyle(.secondary)
+                        .font(.body.monospacedDigit())
+                }
             }
         }
         .formStyle(.grouped)

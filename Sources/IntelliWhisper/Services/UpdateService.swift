@@ -67,9 +67,16 @@ struct UpdateService: Sendable {
     }
 
     /// Returns true if `remote` is a higher semver than `local`.
+    /// Pre-release/build metadata (e.g. "-dev+ca70890") is stripped from both
+    /// before comparison — a dev build of 0.1.2 is treated as equal to the
+    /// 0.1.2 release, so it doesn't prompt the user to "update" to themselves.
     private func isNewer(_ remote: String, than local: String) -> Bool {
-        let r = remote.split(separator: ".").compactMap { Int($0) }
-        let l = local.split(separator: ".").compactMap { Int($0) }
+        func coreVersion(_ v: String) -> [Int] {
+            v.split(separator: "-", maxSplits: 1).first
+                .map { $0.split(separator: ".").compactMap { Int($0) } } ?? []
+        }
+        let r = coreVersion(remote)
+        let l = coreVersion(local)
         for (rv, lv) in zip(r, l) {
             if rv > lv { return true }
             if rv < lv { return false }

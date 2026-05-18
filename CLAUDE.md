@@ -5,6 +5,7 @@ Privacy-first macOS menu bar app for local speech-to-text. Hold hotkey → speak
 ## Core Principles
 
 - NEVER add "Generated with Claude Code" or "Co-Authored by Claude Code" to commits, specs, or code
+- Commit messages must be one-line, concise, and meaningful
 - Use web search when you need information about tech stacks and interfaces. Ask when you need clarification
 - Use `xcodebuild` for macOS app builds
 - Use `scp` to copy files to/from remote servers

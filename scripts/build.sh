@@ -153,6 +153,19 @@ cp "$PROJECT_ROOT/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 cp "$ENTITLEMENTS" "$APP_BUNDLE/Contents/Resources/${APP_NAME}.entitlements"
 cp "$PROJECT_ROOT/Resources/${APP_NAME}.icns" "$APP_BUNDLE/Contents/Resources/${APP_NAME}.icns"
 
+# Append commit hash to version string for untagged (WIP) builds.
+# Tagged commits → semver as-is (e.g. 0.1.2); untagged → 0.1.2-dev+<hash>.
+GIT_TAG=$(git -C "$PROJECT_ROOT" describe --tags --exact-match HEAD 2>/dev/null || true)
+if [ -z "$GIT_TAG" ]; then
+    GIT_HASH=$(git -C "$PROJECT_ROOT" rev-parse --short HEAD)
+    BASE_VER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_BUNDLE/Contents/Info.plist")
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${BASE_VER}-dev+${GIT_HASH}" "$APP_BUNDLE/Contents/Info.plist"
+    echo "Version: ${BASE_VER}-dev+${GIT_HASH} (untagged build)"
+else
+    BASE_VER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_BUNDLE/Contents/Info.plist")
+    echo "Version: ${BASE_VER} (tagged release)"
+fi
+
 # Copy SPM resource bundle (contains custom image assets like Ollama logo)
 RESOURCE_BUNDLE="$BUILD_DIR/$CONFIG/IntelliWhisper_IntelliWhisper.bundle"
 if [ -d "$RESOURCE_BUNDLE" ]; then
